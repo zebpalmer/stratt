@@ -12,6 +12,26 @@
 # [tool.stratt]
 # required_stratt = ">= 0.1.0"
 
+# Version-bump configuration.
+#
+# stratt is a Go + goreleaser project — the version is injected at build
+# time via ldflags from the git tag, so there's no source-code constant
+# to edit.  We make stratt.toml itself the version source, which gives
+# `stratt release` a stable place to bump.  This also keeps the release
+# flow shape-identical to a Python + bump-my-version repo: edit the
+# version in a config file, commit, tag, push.
+#
+# For the very first release, set current_version one bump *below* the
+# target: e.g., to ship v0.1.0, start at "0.0.0" and run
+# `stratt release minor`.  Subsequent releases auto-bump from this line.
+[bump]
+current_version = "0.0.0"
+
+[[bump.files]]
+filename = "stratt.toml"
+search = 'current_version = "{current_version}"'
+replace = 'current_version = "{new_version}"'
+
 # Custom (public) tasks — appear in `stratt help`.
 [tasks.snapshot]
 description = "Build a local snapshot via GoReleaser (no publish)"
