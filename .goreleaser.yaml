@@ -58,24 +58,22 @@ changelog:
       - Merge pull request
       - Merge branch
 
-# Homebrew tap publishing — disabled for the initial release.
+# Homebrew tap publishing.
 #
-# To enable:
-#   1. Create the tap repo:  github.com/zebpalmer/homebrew-tap
-#   2. Add HOMEBREW_TAP_TOKEN as a repo secret (fine-grained PAT with
-#      Contents: read+write on zebpalmer/homebrew-tap)
-#   3. Uncomment the brews: block below
-#
-# brews:
-#   - name: stratt
-#     repository:
-#       owner: zebpalmer
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-#     homepage: "https://stratt.sh"
-#     description: "A polyglot task runner that replaces Makefiles, manages release versions, and handles Kustomize image bumps."
-#     license: Apache-2.0
-#     test: |
-#       system "#{bin}/stratt version"
-#     install: |
-#       bin.install "stratt"
+# Requires:
+#   - github.com/zebpalmer/homebrew-tap to exist
+#   - HOMEBREW_TAP_TOKEN secret on this repo (fine-grained PAT with
+#     Contents: read+write on zebpalmer/homebrew-tap)
+brews:
+  - name: stratt
+    repository:
+      owner: zebpalmer
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://stratt.sh"
+    description: "A polyglot task runner that replaces Makefiles, manages release versions, and handles Kustomize image bumps."
+    license: Apache-2.0
+    test: |
+      system "#{bin}/stratt version"
+    install: |
+      bin.install "stratt"
