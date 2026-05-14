@@ -28,7 +28,7 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
+.idea/
 # .vscode/
 
 # Local design notes / scratch / planning — not for the repo
