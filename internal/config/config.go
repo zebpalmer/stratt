@@ -44,6 +44,27 @@ type Project struct {
 	// item 1).  Nil if the project uses legacy [tool.bumpversion] or
 	// no bump config at all.
 	Bump *Bump
+
+	// Release captures the optional [release] section.  Nil when no
+	// [release] table is present; release flow falls back to its own
+	// defaults (branch auto-detection, push enabled).
+	Release *Release
+}
+
+// Release is the schema for [release] / [tool.stratt.release] (R2.3.6).
+// All fields are pointers/empty-checks so the absence of a setting
+// triggers stratt's defaults rather than zero-value coercion.
+type Release struct {
+	// Branch is the release branch.  Empty means "auto-detect"
+	// (prefer main, fall back to master).
+	Branch string
+
+	// Push controls whether to push commit/tag to remote.  Pointer so
+	// nil means "use stratt's default" (which is true per R2.4.5).
+	Push *bool
+
+	// Remote is the git remote to push to.  Empty means "origin".
+	Remote string
 }
 
 // Task captures the schema for [tasks.NAME] and [helpers.NAME] (R2.6).
@@ -91,6 +112,13 @@ type rawProject struct {
 	Tasks          map[string]rawTask `toml:"tasks"`
 	Helpers        map[string]rawTask `toml:"helpers"`
 	Bump           *rawBump           `toml:"bump"`
+	Release        *rawRelease        `toml:"release"`
+}
+
+type rawRelease struct {
+	Branch string `toml:"branch"`
+	Push   *bool  `toml:"push"`
+	Remote string `toml:"remote"`
 }
 
 type rawTask struct {
@@ -254,6 +282,14 @@ func normalize(raw *rawProject) (*Project, error) {
 				"task %q defined in both [tasks] and [helpers]; pick one (R2.6.10)", name)
 		}
 		p.Helpers[name] = t
+	}
+
+	if raw.Release != nil {
+		p.Release = &Release{
+			Branch: raw.Release.Branch,
+			Push:   raw.Release.Push,
+			Remote: raw.Release.Remote,
+		}
 	}
 
 	if raw.Bump != nil {

@@ -124,6 +124,42 @@ func TestTagExistsFalseWhenAbsent(t *testing.T) {
 	}
 }
 
+func TestBranchExists(t *testing.T) {
+	dir := gitInit(t)
+	r := New(dir)
+	ctx := context.Background()
+
+	// Initial-branch=main, but no commit yet means main exists as a
+	// symbolic ref but has no commits — show-ref still resolves once
+	// a commit exists.  Make one.
+	writeFile(t, dir, "f", "1")
+	mustRun(t, dir, "git", "add", "-A")
+	mustRun(t, dir, "git", "commit", "-q", "-m", "init")
+
+	ok, err := r.BranchExists(ctx, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("expected main to exist")
+	}
+
+	ok, err = r.BranchExists(ctx, "nonexistent-feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Error("nonexistent branch should report false")
+	}
+
+	// Make a master branch too — both should exist.
+	mustRun(t, dir, "git", "branch", "master")
+	ok, _ = r.BranchExists(ctx, "master")
+	if !ok {
+		t.Error("expected master to exist after creation")
+	}
+}
+
 // TestPushBranchFailsWithoutRemote — Push* require a configured remote;
 // the helpers should surface a clean error rather than panicking.
 func TestPushBranchFailsWithoutRemote(t *testing.T) {

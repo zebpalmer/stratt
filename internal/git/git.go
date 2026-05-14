@@ -112,6 +112,22 @@ func (r *Repo) TagExists(ctx context.Context, name string) (bool, error) {
 	return strings.TrimSpace(out) == name, nil
 }
 
+// BranchExists reports whether the named local branch exists.  Uses
+// `git show-ref` which exits 0 if found, 1 if not (no error in either
+// case from our perspective).
+func (r *Repo) BranchExists(ctx context.Context, name string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	cmd.Dir = r.Dir
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	if exit, ok := err.(*exec.ExitError); ok && exit.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("git show-ref %s: %w", name, err)
+}
+
 // ErrNothingToCommit is returned by Commit when there's nothing staged.
 var ErrNothingToCommit = errors.New("nothing to commit")
 

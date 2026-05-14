@@ -161,6 +161,50 @@ after  = ["docker compose down"]
 	}
 }
 
+// TestLoadReleaseSection — [release] populates Project.Release.
+func TestLoadReleaseSection(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "stratt.toml", `
+[release]
+branch = "master"
+push = false
+remote = "upstream"
+`)
+	p, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Release == nil {
+		t.Fatal("expected Release config")
+	}
+	if p.Release.Branch != "master" {
+		t.Errorf("branch: got %q", p.Release.Branch)
+	}
+	if p.Release.Push == nil || *p.Release.Push {
+		t.Errorf("push: expected false, got %v", p.Release.Push)
+	}
+	if p.Release.Remote != "upstream" {
+		t.Errorf("remote: got %q", p.Release.Remote)
+	}
+}
+
+// TestLoadReleasePushTrueExplicit — push=true with an explicit setting
+// should populate the pointer (distinguishing it from "not set").
+func TestLoadReleasePushTrueExplicit(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "stratt.toml", `
+[release]
+push = true
+`)
+	p, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Release == nil || p.Release.Push == nil || !*p.Release.Push {
+		t.Errorf("expected push=true; got %+v", p.Release)
+	}
+}
+
 func TestLoadBumpSection(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "stratt.toml", `

@@ -40,8 +40,9 @@ type Options struct {
 	Kind    bump.Kind
 	HasKind bool
 
-	// Branch is the release branch.  Default "main".  Pre-flight aborts
-	// if HEAD is on a different branch.
+	// Branch is the release branch.  Empty triggers auto-detection
+	// (prefer `main`, fall back to `master`).  Pre-flight aborts if
+	// HEAD is on a different branch than the resolved value.
 	Branch string
 
 	// Push controls whether to push commit + tag to origin after the
@@ -86,9 +87,6 @@ func Run(ctx context.Context, opts Options) error {
 	if opts.CWD == "" {
 		return errors.New("CWD must be set")
 	}
-	if opts.Branch == "" {
-		opts.Branch = "main"
-	}
 	if opts.Remote == "" {
 		opts.Remote = "origin"
 	}
@@ -97,8 +95,19 @@ func Run(ctx context.Context, opts Options) error {
 	// on the same underlying io.Reader silently lose data.
 	stdin := bufio.NewReader(opts.Stdin)
 
-	// Pre-flight gates (R2.4.1).
 	repo := git.New(opts.CWD)
+
+	// Resolve release branch: explicit setting wins, otherwise detect.
+	if opts.Branch == "" {
+		detected, err := detectReleaseBranch(ctx, repo)
+		if err != nil {
+			return err
+		}
+		opts.Branch = detected
+		fmt.Fprintf(opts.Stderr, "→ release branch: %s (auto-detected)\n", opts.Branch)
+	}
+
+	// Pre-flight gates (R2.4.1).
 	if err := preflight(ctx, repo, opts); err != nil {
 		return err
 	}
@@ -229,6 +238,25 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	return nil
+}
+
+// detectReleaseBranch picks a release branch when the caller didn't
+// supply one.  Tries `main` first, then `master`, mirroring GitHub's
+// default-branch evolution.  Repos that use anything else must
+// configure [release] branch = "..." (or pass --branch) explicitly.
+func detectReleaseBranch(ctx context.Context, repo *git.Repo) (string, error) {
+	for _, candidate := range []string{"main", "master"} {
+		exists, err := repo.BranchExists(ctx, candidate)
+		if err != nil {
+			return "", fmt.Errorf("detecting release branch: %w", err)
+		}
+		if exists {
+			return candidate, nil
+		}
+	}
+	return "", errors.New(
+		"no `main` or `master` branch found; configure [release] branch = \"...\" in stratt.toml, " +
+			"or pass --branch <name> explicitly")
 }
 
 // preflight runs R2.4.1's branch/clean checks.  Other gates (tests, lint,

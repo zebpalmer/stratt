@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/zebpalmer/stratt/internal/bump"
+	"github.com/zebpalmer/stratt/internal/config"
 	"github.com/zebpalmer/stratt/internal/release"
 	"github.com/zebpalmer/stratt/internal/runner"
 )
@@ -41,6 +42,9 @@ Examples:
   stratt release patch --ci     # CI mode: no prompts, fail on missing decisions
   stratt release patch --no-push  # local only; print the push command
 
+Release branch resolution (highest precedence first):
+  --branch flag  >  [release] branch in stratt.toml  >  auto-detect (main → master)
+
 See requirements R2.4 for the full design.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -66,13 +70,39 @@ See requirements R2.4 for the full design.`,
 				return err
 			}
 
+			// Load project config to pick up [release] settings.
+			proj, err := config.Load(cwd)
+			if err != nil {
+				return err
+			}
+
+			// Resolve branch/remote/push: CLI flags > project config > defaults.
+			//
+			// Cobra's "Changed" semantic distinguishes flag-set-on-CLI from
+			// flag-defaulted, which is what we need so config overrides
+			// only when no flag was explicitly passed.
+			branch := branchFlag
+			remote := remoteFlag
+			push := !noPushFlag
+			if proj != nil && proj.Release != nil {
+				if !cmd.Flags().Changed("branch") && proj.Release.Branch != "" {
+					branch = proj.Release.Branch
+				}
+				if !cmd.Flags().Changed("remote") && proj.Release.Remote != "" {
+					remote = proj.Release.Remote
+				}
+				if !cmd.Flags().Changed("no-push") && proj.Release.Push != nil {
+					push = *proj.Release.Push
+				}
+			}
+
 			opts := release.Options{
 				CWD:        cwd,
 				CI:         ciFlag,
 				AssumeYes:  yesFlag,
-				Branch:     branchFlag,
-				Remote:     remoteFlag,
-				Push:       !noPushFlag,
+				Branch:     branch,
+				Remote:     remote,
+				Push:       push,
 				SkipChecks: skipChecksFlag,
 				Stdin:      cmd.InOrStdin(),
 				Stdout:     cmd.OutOrStdout(),
@@ -121,7 +151,7 @@ See requirements R2.4 for the full design.`,
 	cmd.Flags().StringVar(&typeFlag, "type", "", "release type: patch | minor | major (alternative to positional arg)")
 	cmd.Flags().BoolVar(&ciFlag, "ci", false, "non-interactive mode: no prompts, fail loudly on missing decisions")
 	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "skip final confirmation (major-bump gate still requires explicit input)")
-	cmd.Flags().StringVar(&branchFlag, "branch", "main", "release branch")
+	cmd.Flags().StringVar(&branchFlag, "branch", "", "release branch (default: auto-detect main → master, or [release] branch from config)")
 	cmd.Flags().StringVar(&remoteFlag, "remote", "origin", "git remote for push")
 	cmd.Flags().BoolVar(&noPushFlag, "no-push", false, "do not push commit/tag to remote (default is to push)")
 	cmd.Flags().BoolVar(&skipChecksFlag, "skip-checks", false, "skip the `stratt all` pre-release verification (emergency use only)")

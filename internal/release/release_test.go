@@ -234,7 +234,12 @@ func TestReleaseNoBumpConfigErrors(t *testing.T) {
 	mustRun(t, dir, "git", "init", "--initial-branch=main", "-q")
 	mustRun(t, dir, "git", "config", "user.email", "test@example.com")
 	mustRun(t, dir, "git", "config", "user.name", "Test User")
-	// No commits = clean tree, branch = main, but no bump config.
+	mustRun(t, dir, "git", "config", "commit.gpgsign", "false")
+	// Make a commit so `main` resolves to a concrete ref for the
+	// branch auto-detector.  No bump config though.
+	writeFile(t, dir, "README.md", "x")
+	mustRun(t, dir, "git", "add", "-A")
+	mustRun(t, dir, "git", "commit", "-q", "-m", "initial")
 	err := Run(context.Background(), Options{
 		CWD:     dir,
 		Kind:    bump.Patch,
@@ -255,6 +260,130 @@ func TestReleaseNoBumpConfigErrors(t *testing.T) {
 
 // TestReleasePreReleaseCheckIsInvoked — when PreReleaseCheck is set,
 // it runs after preflight and before the bump.
+// TestReleaseAutoDetectsMasterBranch — a repo whose default branch is
+// `master` should release without needing --branch.
+func TestReleaseAutoDetectsMasterBranch(t *testing.T) {
+	dir := t.TempDir()
+	mustRun(t, dir, "git", "init", "--initial-branch=master", "-q")
+	mustRun(t, dir, "git", "config", "user.email", "test@example.com")
+	mustRun(t, dir, "git", "config", "user.name", "Test User")
+	mustRun(t, dir, "git", "config", "commit.gpgsign", "false")
+	mustRun(t, dir, "git", "config", "tag.gpgsign", "false")
+	writeFile(t, dir, "pyproject.toml", `[project]
+name = "x"
+version = "1.0.0"
+
+[tool.bumpversion]
+current_version = "1.0.0"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+`)
+	mustRun(t, dir, "git", "add", "-A")
+	mustRun(t, dir, "git", "commit", "-q", "-m", "initial")
+
+	var stderr bytes.Buffer
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		// Branch deliberately left empty → triggers auto-detect.
+		Stdin:  strings.NewReader(""),
+		Stdout: &bytes.Buffer{},
+		Stderr: &stderr,
+	})
+	if err != nil {
+		t.Fatalf("release on master should auto-detect: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "auto-detected") {
+		t.Errorf("expected auto-detect notice; got:\n%s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "master") {
+		t.Errorf("expected `master` in the auto-detect notice; got:\n%s", stderr.String())
+	}
+}
+
+// TestReleasePrefersMainOverMaster — when both branches exist (a repo
+// being migrated from master to main), main wins.
+func TestReleasePrefersMainOverMaster(t *testing.T) {
+	dir := setupRepo(t, "1.0.0")
+	mustRun(t, dir, "git", "branch", "master")
+	var stderr bytes.Buffer
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		Stdin:   strings.NewReader(""),
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &stderr,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "main") {
+		t.Errorf("expected main to win; stderr:\n%s", stderr.String())
+	}
+}
+
+// TestReleaseNoMainOrMasterFails — repos using a non-conventional
+// branch name must configure it explicitly.
+func TestReleaseNoMainOrMasterFails(t *testing.T) {
+	dir := t.TempDir()
+	mustRun(t, dir, "git", "init", "--initial-branch=trunk", "-q")
+	mustRun(t, dir, "git", "config", "user.email", "test@example.com")
+	mustRun(t, dir, "git", "config", "user.name", "Test User")
+	mustRun(t, dir, "git", "config", "commit.gpgsign", "false")
+	writeFile(t, dir, "x", "1")
+	mustRun(t, dir, "git", "add", "-A")
+	mustRun(t, dir, "git", "commit", "-q", "-m", "init")
+
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		Stdin:   strings.NewReader(""),
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	})
+	if err == nil {
+		t.Fatal("expected error for unconventional branch")
+	}
+	if !strings.Contains(err.Error(), "branch") {
+		t.Errorf("error should mention branch: %v", err)
+	}
+}
+
+// TestReleaseExplicitBranchOverridesAutoDetect — passing Branch in
+// Options bypasses auto-detection.
+func TestReleaseExplicitBranchOverridesAutoDetect(t *testing.T) {
+	dir := setupRepo(t, "1.0.0")
+	mustRun(t, dir, "git", "checkout", "-b", "release-2024")
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		Branch:  "release-2024",
+		Stdin:   strings.NewReader(""),
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+	})
+	if err != nil {
+		t.Fatalf("explicit branch should work: %v", err)
+	}
+}
+
 func TestReleasePreReleaseCheckIsInvoked(t *testing.T) {
 	dir := setupRepo(t, "1.0.0")
 	called := false
