@@ -124,7 +124,11 @@ func runRequiredVersionCheck(cmd *cobra.Command, b BuildInfo) error {
 	// Update notifier (R4.12).  Two-stage:
 	//   (a) print the cached advisory now — synchronous, no IO race
 	//   (b) refresh the cache in the background for the next invocation
-	update.NotifyIfBehind(os.Stderr, b.Version)
+	//
+	// The brew formula name is passed so the advisory suggests
+	// `brew upgrade zebpalmer/tap/stratt` (fully-qualified, unambiguous)
+	// rather than the bare `brew upgrade stratt`.
+	update.NotifyIfBehind(os.Stderr, b.Version, strattBrewFormula)
 	go update.RefreshNotifierState(cmd.Context(), update.Options{
 		Repo:           strattUpstreamRepo,
 		CurrentVersion: b.Version,

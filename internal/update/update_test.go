@@ -311,7 +311,7 @@ func TestSwapInPlace(t *testing.T) {
 func TestNotifyIfBehindSilentInCI(t *testing.T) {
 	t.Setenv("CI", "true")
 	var buf bytes.Buffer
-	NotifyIfBehind(&buf, "1.0.0")
+	NotifyIfBehind(&buf, "1.0.0", "myorg/tap/stratt")
 	if buf.Len() != 0 {
 		t.Errorf("expected silence in CI; got %q", buf.String())
 	}
@@ -325,7 +325,7 @@ func TestNotifyIfBehindSilentForDevBuilds(t *testing.T) {
 	_ = SaveState(state)
 
 	var buf bytes.Buffer
-	NotifyIfBehind(&buf, "dev")
+	NotifyIfBehind(&buf, "dev", "myorg/tap/stratt")
 	if buf.Len() != 0 {
 		t.Errorf("dev build should not be notified; got %q", buf.String())
 	}
@@ -338,9 +338,44 @@ func TestNotifyIfBehindPrintsAdvisoryWhenCacheHasNewer(t *testing.T) {
 	_ = SaveState(&State{LatestSeenVersion: "2.0.0"})
 
 	var buf bytes.Buffer
-	NotifyIfBehind(&buf, "1.0.0")
+	NotifyIfBehind(&buf, "1.0.0", "myorg/tap/stratt")
 	if !strings.Contains(buf.String(), "2.0.0") {
 		t.Errorf("expected advisory with 2.0.0; got %q", buf.String())
+	}
+}
+
+// TestPrintAdvisoryUsesFormulaName — direct check that printAdvisory
+// substitutes the fully-qualified formula name for brew installs.
+func TestPrintAdvisoryUsesFormulaName(t *testing.T) {
+	var buf bytes.Buffer
+	printAdvisory(&buf, InstallHomebrew, "1.2.3", "zebpalmer/tap/stratt")
+	got := buf.String()
+	if !strings.Contains(got, "brew upgrade zebpalmer/tap/stratt") {
+		t.Errorf("expected fully-qualified brew command; got %q", got)
+	}
+}
+
+// TestPrintAdvisoryFallsBackToShortNameForEmptyFormula — defensive: if
+// brewFormula isn't set, the advisory still works.
+func TestPrintAdvisoryFallsBackToShortNameForEmptyFormula(t *testing.T) {
+	var buf bytes.Buffer
+	printAdvisory(&buf, InstallHomebrew, "1.2.3", "")
+	got := buf.String()
+	if !strings.Contains(got, "brew upgrade stratt") {
+		t.Errorf("expected fallback to unqualified `stratt`; got %q", got)
+	}
+}
+
+// TestPrintAdvisoryDirectInstall — non-brew paths suggest `stratt self update`.
+func TestPrintAdvisoryDirectInstall(t *testing.T) {
+	var buf bytes.Buffer
+	printAdvisory(&buf, InstallDirect, "1.2.3", "anything")
+	got := buf.String()
+	if !strings.Contains(got, "stratt self update") {
+		t.Errorf("direct-install advisory should mention `stratt self update`; got %q", got)
+	}
+	if strings.Contains(got, "brew") {
+		t.Errorf("direct-install advisory should not mention brew; got %q", got)
 	}
 }
 
@@ -351,7 +386,7 @@ func TestNotifyIfBehindSilentWhenUpToDate(t *testing.T) {
 	_ = SaveState(&State{LatestSeenVersion: "1.0.0"})
 
 	var buf bytes.Buffer
-	NotifyIfBehind(&buf, "1.0.0")
+	NotifyIfBehind(&buf, "1.0.0", "myorg/tap/stratt")
 	if buf.Len() != 0 {
 		t.Errorf("expected silence when up to date; got %q", buf.String())
 	}

@@ -68,7 +68,7 @@ func CheckOnly(ctx context.Context, opts Options) (latest *Release, isNewer bool
 
 // ErrHomebrewManaged is returned when self-update is invoked against a
 // brew-installed binary (R4.7).
-var ErrHomebrewManaged = errors.New("this binary is managed by Homebrew; run `brew upgrade stratt` instead")
+var ErrHomebrewManaged = errors.New("this binary is managed by Homebrew; use `brew upgrade` (or `stratt self update`, which dispatches to brew for you) instead")
 
 // Apply performs the full self-update flow:
 //
@@ -227,13 +227,17 @@ func VerifyCurrent(ctx context.Context, opts Options) error {
 // indicates an update is available.  This runs synchronously and is
 // safe to call from PersistentPreRunE — it doesn't make network calls.
 //
+// brewFormula is the fully-qualified formula name (e.g.
+// "zebpalmer/tap/stratt") used in the advisory when stratt was
+// installed via Homebrew.  Pass an empty string to fall back to the
+// unqualified "stratt".
+//
 // The cache is refreshed by RefreshNotifierState (typically called in
 // a goroutine that the calling process may not wait for) at most once
 // per 24h.
 //
-// No-op in CI, for brew-installed binaries on the wrong path, and for
-// dev / non-semver versions.  R4.12.
-func NotifyIfBehind(w io.Writer, currentVersion string) {
+// No-op in CI and for dev / non-semver versions.  R4.12.
+func NotifyIfBehind(w io.Writer, currentVersion, brewFormula string) {
 	if IsCI() {
 		return
 	}
@@ -251,7 +255,7 @@ func NotifyIfBehind(w io.Writer, currentVersion string) {
 		return
 	}
 	kind, _ := DetectInstall()
-	printAdvisory(w, kind, state.LatestSeenVersion)
+	printAdvisory(w, kind, state.LatestSeenVersion, brewFormula)
 }
 
 // RefreshNotifierState performs one live release check (capped to once
@@ -285,10 +289,17 @@ func RefreshNotifierState(ctx context.Context, opts Options) {
 	_ = SaveState(state)
 }
 
-func printAdvisory(w io.Writer, kind InstallKind, latest string) {
+// printAdvisory writes the one-line advisory matching the install path.
+// brewFormula should be the fully-qualified name (e.g. "owner/tap/name");
+// when empty, falls back to the unqualified binary name.
+func printAdvisory(w io.Writer, kind InstallKind, latest, brewFormula string) {
 	switch kind {
 	case InstallHomebrew:
-		fmt.Fprintf(w, "stratt %s is available — run `brew upgrade stratt`\n", latest)
+		formula := brewFormula
+		if formula == "" {
+			formula = "stratt"
+		}
+		fmt.Fprintf(w, "stratt %s is available — run `brew upgrade %s`\n", latest, formula)
 	default:
 		fmt.Fprintf(w, "stratt %s is available — run `stratt self update`\n", latest)
 	}
