@@ -33,3 +33,7 @@ go.work.sum
 
 # Local design notes / scratch / planning — not for the repo
 .notes/
+
+# Build output
+/bin/
+/dist/
