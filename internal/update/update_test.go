@@ -76,8 +76,8 @@ func TestIsNewer(t *testing.T) {
 		{"1.2.3", "1.2.3", false},
 		{"1.2.2", "1.2.3", false},
 		{"2.0.0", "1.99.99", true},
-		{"dev", "1.0.0", false},     // unparseable → not newer
-		{"1.0.0", "dev", false},     // unparseable current → not newer
+		{"dev", "1.0.0", false}, // unparseable → not newer
+		{"1.0.0", "dev", false}, // unparseable current → not newer
 		{"", "1.0.0", false},
 	}
 	for _, c := range cases {

@@ -242,6 +242,140 @@ func TestBuildRegistryEmptyTaskRejected(t *testing.T) {
 	}
 }
 
+// TestBuildRegistrySynthesizesStyleComposite — `style` should be auto-
+// constructed from format + lint when both engines resolve.
+func TestBuildRegistrySynthesizesStyleComposite(t *testing.T) {
+	dir := goRepo(t)
+	res := capability.New(dir)
+	reg, err := BuildRegistry(res, &config.Project{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	style := reg.Lookup("style")
+	if style == nil {
+		t.Fatal("expected `style` to be synthesized")
+	}
+	if style.Source != SourceBuiltin {
+		t.Errorf("source: got %v", style.Source)
+	}
+	if style.Engine != nil {
+		t.Errorf("composite should not carry an Engine: got %v", style.Engine)
+	}
+	want := []string{"format", "lint"}
+	if len(style.Tasks) != len(want) {
+		t.Fatalf("tasks: got %v, want %v", style.Tasks, want)
+	}
+	for i := range want {
+		if style.Tasks[i] != want[i] {
+			t.Errorf("tasks[%d]: got %q, want %q", i, style.Tasks[i], want[i])
+		}
+	}
+}
+
+// TestBuildRegistrySynthesizesAllComposite — `all` should chain every
+// detected verification stage.  For a Go repo: format, lint, test
+// (no docs unless mkdocs/sphinx detected).
+func TestBuildRegistrySynthesizesAllComposite(t *testing.T) {
+	dir := goRepo(t)
+	res := capability.New(dir)
+	reg, err := BuildRegistry(res, &config.Project{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := reg.Lookup("all")
+	if all == nil {
+		t.Fatal("expected `all` to be synthesized")
+	}
+	want := []string{"format", "lint", "test"}
+	if len(all.Tasks) != len(want) {
+		t.Fatalf("tasks: got %v, want %v", all.Tasks, want)
+	}
+	for i := range want {
+		if all.Tasks[i] != want[i] {
+			t.Errorf("tasks[%d]: got %q, want %q", i, all.Tasks[i], want[i])
+		}
+	}
+}
+
+// TestBuildRegistryAllIncludesDocsWhenPresent — adding mkdocs.yml extends
+// `all` to include docs.
+func TestBuildRegistryAllIncludesDocsWhenPresent(t *testing.T) {
+	dir := goRepo(t)
+	touch(t, dir, "mkdocs.yml")
+	res := capability.New(dir)
+	reg, err := BuildRegistry(res, &config.Project{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := reg.Lookup("all")
+	if all == nil {
+		t.Fatal("expected `all` to be synthesized")
+	}
+	want := []string{"format", "lint", "test", "docs"}
+	if len(all.Tasks) != len(want) {
+		t.Fatalf("tasks: got %v, want %v", all.Tasks, want)
+	}
+}
+
+// TestBuildRegistryAllShrinksWhenConstituentDisabled — disabling test
+// silently removes it from `all`'s Tasks list (R2.6.10 plus the
+// "let users override if all should be less than all" policy).
+func TestBuildRegistryAllShrinksWhenConstituentDisabled(t *testing.T) {
+	dir := goRepo(t)
+	res := capability.New(dir)
+	proj := &config.Project{
+		Tasks: map[string]config.Task{
+			"test": {Enabled: false},
+		},
+	}
+	reg, err := BuildRegistry(res, proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := reg.Lookup("all")
+	if all == nil {
+		t.Fatal("expected `all` to remain")
+	}
+	for _, e := range all.Tasks {
+		if e == "test" {
+			t.Errorf("disabled `test` should have been pruned from `all`; got %v", all.Tasks)
+		}
+	}
+}
+
+// TestBuildRegistryAllOverrideReplacesEntirely — user can override `all`
+// to be a narrower set.
+func TestBuildRegistryAllOverrideReplacesEntirely(t *testing.T) {
+	dir := goRepo(t)
+	res := capability.New(dir)
+	proj := &config.Project{
+		Tasks: map[string]config.Task{
+			"all": {
+				Tasks:   []string{"format"},
+				Enabled: true,
+				// User defines `all` as just format — no Run, no body.
+				// This is augment-shape on a composite; the existing
+				// composite's Tasks should be PRESERVED behind the user's
+				// additions per R2.6.5.
+			},
+		},
+	}
+	reg, err := BuildRegistry(res, proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := reg.Lookup("all")
+	if all == nil {
+		t.Fatal("expected `all`")
+	}
+	// User's `format` comes first, then the existing composite's [format, lint, test].
+	// Duplicates are fine — RunTask runs each in order.
+	want := []string{"format", "format", "lint", "test"}
+	if len(all.Tasks) != len(want) {
+		t.Errorf("augmented `all`: got %v, want %v", all.Tasks, want)
+	}
+}
+
 func TestRegistryTasksIsSorted(t *testing.T) {
 	dir := goRepo(t)
 	res := capability.New(dir)

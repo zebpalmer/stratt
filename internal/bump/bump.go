@@ -101,12 +101,12 @@ type FileEntry struct {
 // Plan is the result of computing a bump.  All fields are populated
 // without touching the filesystem; Apply commits the changes.
 type Plan struct {
-	Cfg            *Config
-	OldVersion     string
-	NewVersion     string
-	FileChanges    []FileChange
-	CommitMessage  string
-	TagName        string
+	Cfg           *Config
+	OldVersion    string
+	NewVersion    string
+	FileChanges   []FileChange
+	CommitMessage string
+	TagName       string
 }
 
 // FileChange describes a single edit Apply will make.

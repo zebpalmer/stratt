@@ -12,9 +12,9 @@ import (
 // Tracks the last check time (R4.12) and the previously installed
 // version (R4.13) for rollback.
 type State struct {
-	LastCheck       time.Time `json:"last_check"`
-	LatestSeenVersion string  `json:"latest_seen_version"`
-	PreviousVersion   string  `json:"previous_version"`
+	LastCheck         time.Time `json:"last_check"`
+	LatestSeenVersion string    `json:"latest_seen_version"`
+	PreviousVersion   string    `json:"previous_version"`
 }
 
 // StatePath returns the canonical state-file path under HOME.

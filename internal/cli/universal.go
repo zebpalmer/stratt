@@ -40,10 +40,12 @@ var universalSpecs = []universalSpec{
 	{name: "test", short: "Run tests using the detected test runner"},
 	{name: "lint", short: "Run linters using the detected linter"},
 	{name: "format", short: "Run formatters using the detected formatter"},
+	{name: "style", short: "Run formatters and linters together (format + lint)"},
 	{name: "setup", short: "Perform first-time project setup"},
 	{name: "sync", short: "Sync dependencies from the project's lockfile"},
 	{name: "lock", short: "Update the project's lockfile from its manifest"},
 	{name: "upgrade", short: "Upgrade all dependencies to their latest compatible versions"},
+	{name: "all", short: "Run the full verification suite (everything detected)"},
 }
 
 // newUniversalCmd returns a Cobra command that resolves and runs the

@@ -16,9 +16,9 @@ import (
 //
 // Target selection per R2.4.8:
 //
-//   1. stratt.toml exists → write to [bump] in stratt.toml
-//   2. Else if pyproject.toml exists → write to [tool.stratt.bump]
-//   3. Else → create stratt.toml with [bump]
+//  1. stratt.toml exists → write to [bump] in stratt.toml
+//  2. Else if pyproject.toml exists → write to [tool.stratt.bump]
+//  3. Else → create stratt.toml with [bump]
 //
 // Sources tried in order; the first non-empty source is used:
 //

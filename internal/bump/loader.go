@@ -12,11 +12,11 @@ import (
 // Load returns the bump Config for root, reading from the first matching
 // location in the R2.4.7 compat chain:
 //
-//   1. [bump] in stratt.toml
-//   2. [tool.stratt.bump] in pyproject.toml
-//   3. [tool.bumpversion] in pyproject.toml
-//   4. .bumpversion.toml
-//   5. .bumpversion.cfg  (deprecation note emitted via the returned warning)
+//  1. [bump] in stratt.toml
+//  2. [tool.stratt.bump] in pyproject.toml
+//  3. [tool.bumpversion] in pyproject.toml
+//  4. .bumpversion.toml
+//  5. .bumpversion.cfg  (deprecation note emitted via the returned warning)
 //
 // Returns (nil, nil) when no bump config is present anywhere — the
 // resolver then uses tag-only mode.

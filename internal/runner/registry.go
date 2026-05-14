@@ -59,16 +59,24 @@ func BuildRegistry(res *capability.Resolver, proj *config.Project) (*Registry, e
 	// Built-in tasks come first.  Every resolved engine becomes a Task
 	// in the registry; the universal subcommand dispatch and `stratt run`
 	// then share the same executor.
+	//
+	// Composite engines (style, all) need special handling: the runtime
+	// Task records the composition in its Tasks field, not as an Engine.
 	for _, resolution := range res.ResolveAll() {
 		if resolution.Engine == nil {
 			continue
 		}
-		r.tasks[resolution.Command] = &Task{
+		task := &Task{
 			Name:        resolution.Command,
 			Description: defaultBuiltinDescription(resolution.Command),
 			Source:      SourceBuiltin,
-			Engine:      resolution.Engine,
 		}
+		if comp, ok := resolution.Engine.(capability.CompositeEngine); ok {
+			task.Tasks = comp.CompositeMembers()
+		} else {
+			task.Engine = resolution.Engine
+		}
+		r.tasks[resolution.Command] = task
 	}
 
 	// Merge user-defined tasks and helpers.  Helpers carry Hidden=true;
@@ -106,7 +114,17 @@ func (r *Registry) merge(name string, ut config.Task, hidden bool) error {
 	if !ut.Enabled {
 		// `enabled = false` removes a task (R2.6.2).  Built-ins are
 		// removed; pure user tasks are simply not added.
+		//
+		// Built-in composites (e.g. `all = [format, lint, test, docs]`)
+		// silently shrink when a constituent is disabled — `stratt all`
+		// just skips the disabled stage.  User-defined task references
+		// to disabled tasks are still strict validation errors.
 		delete(r.tasks, name)
+		for _, t := range r.tasks {
+			if t.Source == SourceBuiltin {
+				t.Tasks = withoutString(t.Tasks, name)
+			}
+		}
 		return nil
 	}
 
@@ -132,12 +150,18 @@ func (r *Registry) merge(name string, ut config.Task, hidden bool) error {
 
 	case isBuiltin && len(ut.Run) == 0:
 		// Augment mode (R2.6.1).  Built-in body preserved, hooks attached.
+		//
+		// For composite built-ins (Engine nil but Tasks populated), the
+		// composition's members must also be preserved — the user's
+		// tasks list runs *before* the built-in composition.
+		mergedTasks := append([]string(nil), ut.Tasks...)
+		mergedTasks = append(mergedTasks, existing.Tasks...)
 		t := &Task{
 			Name:        name,
 			Description: pick(ut.Description, existing.Description),
 			Hidden:      hidden,
 			Source:      SourceAugmented,
-			Tasks:       append([]string(nil), ut.Tasks...),
+			Tasks:       mergedTasks,
 			Before:      append([]string(nil), ut.Before...),
 			Engine:      existing.Engine,
 			After:       append([]string(nil), ut.After...),
@@ -272,6 +296,10 @@ func defaultBuiltinDescription(name string) string {
 		return "Bump Kustomize image tags"
 	case "docs":
 		return "Build or serve documentation"
+	case "style":
+		return "Run formatters and linters together"
+	case "all":
+		return "Run the full verification suite (everything detected)"
 	}
 	return ""
 }
@@ -292,4 +320,17 @@ func joinPath(stack []string) string {
 		s += e
 	}
 	return s
+}
+
+// withoutString returns slice with every occurrence of needle removed,
+// preserving the order of the remaining elements.  Used when a disabled
+// task is removed from a built-in composite's Tasks list.
+func withoutString(slice []string, needle string) []string {
+	out := slice[:0]
+	for _, s := range slice {
+		if s != needle {
+			out = append(out, s)
+		}
+	}
+	return out
 }

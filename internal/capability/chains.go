@@ -137,9 +137,9 @@ func (r *Resolver) resolveClean() Engine {
 
 // resolveRelease — see requirements.md §3 "release" chain.
 //
-//   1. Bump-my-version config present anywhere → native bump engine
-//   2. .goreleaser.yaml present (and no bump config) → tag-only mode
-//   3. Otherwise → tag-only mode
+//  1. Bump-my-version config present anywhere → native bump engine
+//  2. .goreleaser.yaml present (and no bump config) → tag-only mode
+//  3. Otherwise → tag-only mode
 //
 // `stratt release` is a custom-shape subcommand, so these engines
 // are display-only (delegateEngine).  Their Status reflects that the
@@ -187,6 +187,53 @@ func (r *Resolver) resolveDocs() Engine {
 		return &execEngine{tool: "sphinx-build", argv: []string{"docs", "_build/html"}}
 	}
 	return nil
+}
+
+// resolveStyle — composite of format + lint.  Only resolves when both
+// constituents have engines (i.e., the project has formatters and
+// linters available).
+func (r *Resolver) resolveStyle() Engine {
+	if r.resolveFormat() == nil || r.resolveLint() == nil {
+		return nil
+	}
+	return &compositeEngine{
+		display: "format + lint",
+		members: []string{"format", "lint"},
+	}
+}
+
+// resolveAll — composite of every detected verification step that's
+// applicable.  Per project policy this is "everything detected" by
+// default; users override via [tasks.all] in stratt.toml when they
+// want a narrower set.
+//
+// Membership: format, lint, test, docs (in that order, each included
+// only if its constituent engine resolves).
+func (r *Resolver) resolveAll() Engine {
+	var members []string
+	if r.resolveFormat() != nil {
+		members = append(members, "format")
+	}
+	if r.resolveLint() != nil {
+		members = append(members, "lint")
+	}
+	if r.resolveTest() != nil {
+		members = append(members, "test")
+	}
+	if r.resolveDocs() != nil {
+		members = append(members, "docs")
+	}
+	if len(members) == 0 {
+		return nil
+	}
+	display := ""
+	for i, m := range members {
+		if i > 0 {
+			display += " + "
+		}
+		display += m
+	}
+	return &compositeEngine{display: display, members: members}
 }
 
 // fileExists returns true if any of the given files exist in the repo root.

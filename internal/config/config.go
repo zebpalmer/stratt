@@ -76,10 +76,10 @@ type Task struct {
 // Bump is the schema for [bump] / [tool.stratt.bump] (R2.4.10).
 // Only the v1 feature set is represented here.
 type Bump struct {
-	CurrentVersion string
-	Files          []string
-	MessageTemplate string  // git commit message; default applied at run time
-	TagPrefix       string  // default "v"
+	CurrentVersion  string
+	Files           []string
+	MessageTemplate string // git commit message; default applied at run time
+	TagPrefix       string // default "v"
 }
 
 // raw types mirror the on-disk TOML shape.  They are intentionally

@@ -93,11 +93,17 @@ func (r *Resolver) HasStack(name string) bool {
 //
 // Adding a command here without adding it to ResolveAll is a programming
 // error; the resolver will return an "unknown command" Resolution.
+//
+// `style` and `all` are composite built-ins — their resolveXxx returns
+// a compositeEngine whose Run() is intentionally inert; execution flows
+// through the task Registry, which expands the composition into a Task
+// with a populated Tasks field.
 var UniversalCommands = []string{
 	"build",
 	"test",
 	"lint",
 	"format",
+	"style",
 	"setup",
 	"sync",
 	"lock",
@@ -106,6 +112,7 @@ var UniversalCommands = []string{
 	"release",
 	"deploy",
 	"docs",
+	"all",
 }
 
 // Resolve returns the chain-resolved Engine for one universal command,
@@ -137,6 +144,10 @@ func (r *Resolver) Resolve(command string) Resolution {
 		res.Engine = r.resolveDeploy()
 	case "docs":
 		res.Engine = r.resolveDocs()
+	case "style":
+		res.Engine = r.resolveStyle()
+	case "all":
+		res.Engine = r.resolveAll()
 	}
 	return res
 }

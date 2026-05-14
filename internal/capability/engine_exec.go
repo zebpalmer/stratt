@@ -107,3 +107,39 @@ func (e *delegateEngine) Run(_ context.Context, _ []string) error {
 	return fmt.Errorf("engine %q is dispatched by the %q subcommand, not the runner",
 		e.display, e.delegateCmd)
 }
+
+// compositeEngine represents a built-in command that's a composition of
+// other built-in commands (e.g. `stratt style` = `format + lint`).
+//
+// The Resolver returns one of these so `stratt doctor` can show the
+// composition.  Actual execution is delegated to the task Registry,
+// which expands the composition into a Task with a non-empty Tasks
+// field.  Calling Run() directly is therefore a programming error.
+//
+// Members is the ordered list of constituent built-in task names.
+type compositeEngine struct {
+	display string
+	members []string
+}
+
+// CompositeMembers exposes the constituent task names so the Registry
+// builder can synthesize the runtime Task without re-deriving them.
+func (e *compositeEngine) CompositeMembers() []string {
+	out := make([]string, len(e.members))
+	copy(out, e.members)
+	return out
+}
+
+func (e *compositeEngine) Name() string         { return e.display }
+func (e *compositeEngine) Status() EngineStatus { return StatusReady }
+func (e *compositeEngine) Run(_ context.Context, _ []string) error {
+	return fmt.Errorf("composite %q runs via the task registry, not the engine path", e.display)
+}
+
+// CompositeEngine is the publicly-typed assertion target the runner
+// uses to recognize composites without depending on unexported types.
+// Implementations must mirror compositeEngine's CompositeMembers method.
+type CompositeEngine interface {
+	Engine
+	CompositeMembers() []string
+}

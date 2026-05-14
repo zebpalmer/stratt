@@ -15,20 +15,20 @@ import (
 
 // Release is the minimal GitHub Releases API representation stratt needs.
 type Release struct {
-	TagName    string  `json:"tag_name"`
-	Prerelease bool    `json:"prerelease"`
-	Draft      bool    `json:"draft"`
-	HTMLURL    string  `json:"html_url"`
+	TagName     string  `json:"tag_name"`
+	Prerelease  bool    `json:"prerelease"`
+	Draft       bool    `json:"draft"`
+	HTMLURL     string  `json:"html_url"`
 	PublishedAt string  `json:"published_at"`
-	Assets     []Asset `json:"assets"`
+	Assets      []Asset `json:"assets"`
 }
 
 // Asset is one downloadable file attached to a Release.
 type Asset struct {
-	Name        string `json:"name"`
+	Name               string `json:"name"`
 	BrowserDownloadURL string `json:"browser_download_url"`
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
+	ContentType        string `json:"content_type"`
+	Size               int64  `json:"size"`
 }
 
 // ChannelStable / ChannelPrerelease control which releases are considered
