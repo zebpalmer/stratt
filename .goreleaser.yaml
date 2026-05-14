@@ -1,0 +1,79 @@
+# GoReleaser config for stratt.
+#
+# https://goreleaser.com/
+#
+# Triggered by .github/workflows/release.yml on tag push.
+#
+# Builds darwin/linux × arm64/amd64 (R1.6), produces release archives + a
+# Homebrew formula in LacalleGroup/homebrew-tap.  Artifact attestations are
+# produced by the workflow itself (actions/attest-build-provenance), not by
+# GoReleaser, so they're not configured here.
+version: 2
+
+project_name: stratt
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: stratt
+    main: ./cmd/stratt
+    binary: stratt
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - id: stratt
+    formats: [tar.gz]
+    name_template: "stratt_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot+{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+# Homebrew tap publishing.
+#
+# Requires LacalleGroup/homebrew-tap to exist and a HOMEBREW_TAP_TOKEN secret
+# with `repo` scope set on this repository.  When the tap repo doesn't exist
+# yet, comment out the `brews:` block below — the build will still produce
+# release archives.
+brews:
+  - name: stratt
+    repository:
+      owner: LacalleGroup
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://stratt.sh"
+    description: "A polyglot task runner that replaces Makefiles, manages release versions, and handles Kustomize image bumps."
+    license: Apache-2.0
+    test: |
+      system "#{bin}/stratt version"
+    install: |
+      bin.install "stratt"
