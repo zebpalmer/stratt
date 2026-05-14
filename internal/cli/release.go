@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zebpalmer/stratt/internal/bump"
 	"github.com/zebpalmer/stratt/internal/release"
+	"github.com/zebpalmer/stratt/internal/runner"
 )
 
 // newReleaseCmd wires the `stratt release` flow.  This is a custom-shape
@@ -17,12 +19,13 @@ import (
 // interactive prompts and push behavior.
 func newReleaseCmd() *cobra.Command {
 	var (
-		typeFlag   string
-		ciFlag     bool
-		yesFlag    bool
-		branchFlag string
-		remoteFlag string
-		noPushFlag bool
+		typeFlag       string
+		ciFlag         bool
+		yesFlag        bool
+		branchFlag     string
+		remoteFlag     string
+		noPushFlag     bool
+		skipChecksFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "release [patch|minor|major]",
@@ -55,16 +58,44 @@ See requirements R2.4 for the full design.`,
 				kindStr = args[0]
 			}
 
+			// Build the task Registry so the pre-release `all` check has
+			// somewhere to dispatch.  Errors here (e.g. cycles in user
+			// task config) abort before we touch git.
+			reg, _, err := loadRegistry(cwd)
+			if err != nil {
+				return err
+			}
+
 			opts := release.Options{
-				CWD:       cwd,
-				CI:        ciFlag,
-				AssumeYes: yesFlag,
-				Branch:    branchFlag,
-				Remote:    remoteFlag,
-				Push:      !noPushFlag,
-				Stdin:     cmd.InOrStdin(),
-				Stdout:    cmd.OutOrStdout(),
-				Stderr:    cmd.ErrOrStderr(),
+				CWD:        cwd,
+				CI:         ciFlag,
+				AssumeYes:  yesFlag,
+				Branch:     branchFlag,
+				Remote:     remoteFlag,
+				Push:       !noPushFlag,
+				SkipChecks: skipChecksFlag,
+				Stdin:      cmd.InOrStdin(),
+				Stdout:     cmd.OutOrStdout(),
+				Stderr:     cmd.ErrOrStderr(),
+				PreReleaseCheck: func(ctx context.Context) error {
+					// Skip silently if `all` doesn't exist (e.g., this
+					// repo has no format/lint/test detected).  Better
+					// than failing loudly for repos that haven't earned
+					// the composite.
+					if reg.Lookup("all") == nil {
+						fmt.Fprintln(cmd.ErrOrStderr(),
+							"  (no `all` task in this repo — skipping pre-release checks)")
+						return nil
+					}
+					r := runner.New(runner.Options{
+						Stdout:   cmd.OutOrStdout(),
+						Stderr:   cmd.ErrOrStderr(),
+						CWD:      cwd,
+						Registry: reg,
+						CI:       ciFlag,
+					})
+					return r.RunTask(ctx, "all")
+				},
 			}
 
 			if kindStr != "" {
@@ -93,5 +124,6 @@ See requirements R2.4 for the full design.`,
 	cmd.Flags().StringVar(&branchFlag, "branch", "main", "release branch")
 	cmd.Flags().StringVar(&remoteFlag, "remote", "origin", "git remote for push")
 	cmd.Flags().BoolVar(&noPushFlag, "no-push", false, "do not push commit/tag to remote (default is to push)")
+	cmd.Flags().BoolVar(&skipChecksFlag, "skip-checks", false, "skip the `stratt all` pre-release verification (emergency use only)")
 	return cmd
 }

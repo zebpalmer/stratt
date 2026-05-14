@@ -34,18 +34,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0   # needed for changelog
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
           cache: true
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
@@ -53,12 +53,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # The homebrew tap is in a separate repo, so it needs a PAT with
-          # `repo` scope on that repo, set as HOMEBREW_TAP_TOKEN.  Until the
-          # tap repo exists or the secret is set, the brews: section in
-          # .goreleaser.yaml should be commented out.
+          # Contents: read+write on zebpalmer/homebrew-tap, set as
+          # HOMEBREW_TAP_TOKEN.  Until the tap repo exists or the secret is
+          # set, the brews: section in .goreleaser.yaml should be
+          # commented out.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Attest release binaries
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "dist/stratt_*"

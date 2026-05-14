@@ -64,6 +64,20 @@ type Options struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+
+	// PreReleaseCheck, if non-nil, is invoked after the branch+clean
+	// preflight and before the version bump.  Used to run `stratt all`
+	// (or whatever the project defines as its full verification suite).
+	// Returning an error aborts the release.
+	//
+	// After this returns, the working tree is re-checked for cleanliness
+	// to catch any files modified by formatters or autofixers that were
+	// not subsequently committed.
+	PreReleaseCheck func(ctx context.Context) error
+
+	// SkipChecks bypasses PreReleaseCheck entirely.  For emergency
+	// releases when the full check suite is broken for unrelated reasons.
+	SkipChecks bool
 }
 
 // Run executes one release per Options.  Returns nil on success, or a
@@ -87,6 +101,28 @@ func Run(ctx context.Context, opts Options) error {
 	repo := git.New(opts.CWD)
 	if err := preflight(ctx, repo, opts); err != nil {
 		return err
+	}
+
+	// Full verification suite (`stratt all` or equivalent).  Runs before
+	// the bump so that formatters/autofixers have a chance to modify
+	// files; the post-check below catches any unstaged changes.
+	if !opts.SkipChecks && opts.PreReleaseCheck != nil {
+		fmt.Fprintln(opts.Stderr, "→ running pre-release checks")
+		if err := opts.PreReleaseCheck(ctx); err != nil {
+			return fmt.Errorf("pre-release checks failed: %w", err)
+		}
+		// Re-check clean tree.  If a formatter rewrote files during the
+		// checks, abort so the user can review and commit the changes
+		// before retrying the release.
+		clean, err := repo.IsClean(ctx)
+		if err != nil {
+			return fmt.Errorf("post-check git status: %w", err)
+		}
+		if !clean {
+			return errors.New(
+				"working tree is dirty after pre-release checks " +
+					"(a formatter or autofixer modified files); commit those changes and retry")
+		}
 	}
 
 	// Load bump configuration.
@@ -167,18 +203,25 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	// Push commit + tag.
+	// Push commit + tag.  Surface each push step clearly so the user
+	// sees confirmation that the remote actually received the release.
 	if opts.Push {
+		fmt.Fprintf(opts.Stdout, "→ pushing commit to %s/%s\n", opts.Remote, opts.Branch)
 		if err := repo.PushBranch(ctx, opts.Remote, opts.Branch); err != nil {
 			return fmt.Errorf("push branch: %w", err)
 		}
+		fmt.Fprintf(opts.Stdout, "✓ pushed commit to %s/%s\n", opts.Remote, opts.Branch)
 		if cfg.Tag {
+			fmt.Fprintf(opts.Stdout, "→ pushing tag %s\n", plan.TagName)
 			if err := repo.PushTag(ctx, opts.Remote, plan.TagName); err != nil {
 				return fmt.Errorf("push tag: %w", err)
 			}
+			fmt.Fprintf(opts.Stdout, "✓ pushed tag %s\n", plan.TagName)
 		}
+		fmt.Fprintf(opts.Stdout, "\n✓ Released %s — remote is now at %s.\n",
+			plan.NewVersion, plan.TagName)
 	} else {
-		fmt.Fprintf(opts.Stdout, "\nLocal release complete.  Push with:\n  git push %s %s\n",
+		fmt.Fprintf(opts.Stdout, "\nLocal release complete (push disabled).  Push manually with:\n  git push %s %s\n",
 			opts.Remote, opts.Branch)
 		if cfg.Tag {
 			fmt.Fprintf(opts.Stdout, "  git push %s %s\n", opts.Remote, plan.TagName)

@@ -3,6 +3,7 @@ package release
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -252,6 +253,124 @@ func TestReleaseNoBumpConfigErrors(t *testing.T) {
 	}
 }
 
+// TestReleasePreReleaseCheckIsInvoked — when PreReleaseCheck is set,
+// it runs after preflight and before the bump.
+func TestReleasePreReleaseCheckIsInvoked(t *testing.T) {
+	dir := setupRepo(t, "1.0.0")
+	called := false
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		Stdin:   strings.NewReader(""),
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+		PreReleaseCheck: func(_ context.Context) error {
+			called = true
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("release failed: %v", err)
+	}
+	if !called {
+		t.Error("PreReleaseCheck was not invoked")
+	}
+}
+
+// TestReleasePreReleaseCheckFailureAborts — error from PreReleaseCheck
+// aborts the release; no bump happens.
+func TestReleasePreReleaseCheckFailureAborts(t *testing.T) {
+	dir := setupRepo(t, "1.0.0")
+	wantErr := errors.New("tests failed")
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		Stdin:   strings.NewReader(""),
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+		PreReleaseCheck: func(_ context.Context) error {
+			return wantErr
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error from failed pre-release check")
+	}
+	if !strings.Contains(err.Error(), "tests failed") {
+		t.Errorf("error should propagate cause: %v", err)
+	}
+	// pyproject should not have been bumped.
+	body, _ := os.ReadFile(filepath.Join(dir, "pyproject.toml"))
+	if !strings.Contains(string(body), `version = "1.0.0"`) {
+		t.Errorf("pyproject should be unchanged; got:\n%s", body)
+	}
+}
+
+// TestReleaseDetectsDirtyTreeAfterChecks — if PreReleaseCheck leaves the
+// tree dirty (e.g., an autofixer rewrote files), the release aborts so
+// the user can review/commit those changes first.
+func TestReleaseDetectsDirtyTreeAfterChecks(t *testing.T) {
+	dir := setupRepo(t, "1.0.0")
+	err := Run(context.Background(), Options{
+		CWD:     dir,
+		Kind:    bump.Patch,
+		HasKind: true,
+		CI:      true,
+		Push:    false,
+		Stdin:   strings.NewReader(""),
+		Stdout:  &bytes.Buffer{},
+		Stderr:  &bytes.Buffer{},
+		PreReleaseCheck: func(_ context.Context) error {
+			// Simulate an autofixer that touched a tracked file.
+			return os.WriteFile(filepath.Join(dir, "pyproject.toml"),
+				[]byte(`[project]
+name = "x"
+version = "1.0.0"
+# autofixer added this comment
+`), 0o644)
+		},
+	})
+	if err == nil {
+		t.Fatal("expected dirty-tree error after PreReleaseCheck")
+	}
+	if !strings.Contains(err.Error(), "dirty") {
+		t.Errorf("error should mention dirty tree: %v", err)
+	}
+}
+
+// TestReleaseSkipChecksBypassesPreReleaseCheck — --skip-checks (SkipChecks
+// flag) prevents PreReleaseCheck from running, even if set.
+func TestReleaseSkipChecksBypassesPreReleaseCheck(t *testing.T) {
+	dir := setupRepo(t, "1.0.0")
+	called := false
+	err := Run(context.Background(), Options{
+		CWD:        dir,
+		Kind:       bump.Patch,
+		HasKind:    true,
+		CI:         true,
+		Push:       false,
+		SkipChecks: true,
+		Stdin:      strings.NewReader(""),
+		Stdout:     &bytes.Buffer{},
+		Stderr:     &bytes.Buffer{},
+		PreReleaseCheck: func(_ context.Context) error {
+			called = true
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Error("PreReleaseCheck should not be called when SkipChecks=true")
+	}
+}
+
 // TestReleaseLocalOnlyPrintsPushHint — Push: false should leave the
 // commit + tag locally and print the push command.
 func TestReleaseLocalOnlyPrintsPushHint(t *testing.T) {
@@ -272,7 +391,7 @@ func TestReleaseLocalOnlyPrintsPushHint(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := stdout.String()
-	if !strings.Contains(out, "Push with:") {
+	if !strings.Contains(out, "Push manually with:") {
 		t.Errorf("expected push hint; got:\n%s", out)
 	}
 	if !strings.Contains(out, "git push origin main") {
