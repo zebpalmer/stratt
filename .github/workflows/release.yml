@@ -1,0 +1,64 @@
+# Release workflow for stratt.
+#
+# Triggered by pushing a semver tag (v1.2.3).  Produces:
+#   - cross-platform release archives (darwin/linux x arm64/amd64)
+#   - a Homebrew formula update in zebpalmer/homebrew-tap
+#   - GitHub Artifact Attestations for every binary (Sigstore keyless OIDC)
+#
+# The attestations are the trust anchor for `stratt self update`.  The
+# verification logic embedded in stratt pins:
+#   - repository: zebpalmer/stratt
+#   - workflow:   .github/workflows/release.yml
+#
+# Per R4.2 / R4.3 / R4.4.
+#
+# Security note: this workflow does not consume any user-controlled inputs
+# (issue titles, PR bodies, commit messages, head refs) in `run:` blocks or
+# anywhere else.  Only fixed strings and `secrets.*` are interpolated.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write       # create the GitHub Release
+  id-token: write       # OIDC for sigstore keyless signing
+  attestations: write   # publish GitHub artifact attestations
+  packages: write       # future-proofing if we publish to GHCR
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for changelog
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The homebrew tap is in a separate repo, so it needs a PAT with
+          # `repo` scope on that repo, set as HOMEBREW_TAP_TOKEN.  Until the
+          # tap repo exists or the secret is set, the brews: section in
+          # .goreleaser.yaml should be commented out.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Attest release binaries
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/stratt_*"

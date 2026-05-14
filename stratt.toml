@@ -1,0 +1,23 @@
+# stratt's own configuration — we dogfood from day one.
+#
+# This is a `stratt.toml` (standalone) file because stratt itself is a Go
+# project, not a Python one — there's no pyproject.toml to embed config in.
+# Python repos adopting stratt should prefer `[tool.stratt]` in pyproject.toml
+# unless they have a strong reason to split it out.
+#
+# Every key here is optional; this file mostly serves as a worked example
+# while the config-loader code is being built.
+
+# Project-side metadata.  Future use; presently unused.
+# [tool.stratt]
+# required_stratt = ">= 0.1.0"
+
+# Custom (public) tasks — appear in `stratt help`.
+[tasks.snapshot]
+description = "Build a local snapshot via GoReleaser (no publish)"
+run = "goreleaser release --snapshot --clean --skip=publish"
+
+# Helpers — hidden from `stratt help`, but reachable via `stratt run <name>`
+# and composable from other tasks.  None yet for the stratt repo.
+# [helpers.example]
+# run = "echo 'hidden helper'"
