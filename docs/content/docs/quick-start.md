@@ -13,7 +13,13 @@ brew install zebpalmer/tap/stratt
 stratt version
 ```
 
-If you don't have Homebrew, grab a binary from the [releases page](https://github.com/zebpalmer/stratt/releases).
+If you don't have Homebrew, use the install script (POSIX shells, macOS + Linux):
+
+```sh
+curl -fsSL https://stratt.sh/install.sh | sh
+```
+
+Or grab a binary directly from the [releases page](https://github.com/zebpalmer/stratt/releases). For CI/CD usage see [Using stratt in CI](/docs/ci).
 
 ## 2. See what stratt sees
 

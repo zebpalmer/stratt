@@ -184,7 +184,15 @@ func newSelfVerifyCmd(b BuildInfo) *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify",
 		Short: "Re-verify the running stratt binary against its release attestation",
-		Long:  `Useful for verifying integrity after install or any time without performing an update.`,
+		Long: `Re-runs the attestation check against the on-disk binary.  Useful for
+catching post-install tampering (disk corruption, malicious overwrite,
+etc).
+
+NOT a substitute for first-install trust.  A compromised binary can
+trivially fake its own verification — bootstrap trust with an
+independent verifier (e.g. ` + "`gh attestation verify`" + ` against the release
+archive) before running stratt the first time.  The install script at
+https://stratt.sh/install.sh does this automatically when gh is on PATH.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			err := update.VerifyCurrent(cmd.Context(), update.Options{
