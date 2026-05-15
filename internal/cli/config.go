@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/zebpalmer/stratt/internal/config"
@@ -18,20 +20,29 @@ func newConfigCmd(b BuildInfo) *cobra.Command {
 		Use:   "config",
 		Short: "Inspect and migrate stratt project configuration",
 	}
-	cmd.AddCommand(newConfigMigrateCmd())
+	cmd.AddCommand(newConfigMigrateCmd(b))
 	cmd.AddCommand(newConfigMigrateBumpCmd())
 	cmd.AddCommand(newConfigShowCmd())
 	cmd.AddCommand(newConfigRequireVersionCmd(b))
 	return cmd
 }
 
-func newConfigMigrateCmd() *cobra.Command {
-	return &cobra.Command{
+func newConfigMigrateCmd(b BuildInfo) *cobra.Command {
+	var (
+		yes        bool
+		skipPinBump bool
+	)
+	cmd := &cobra.Command{
 		Use:   "migrate",
 		Short: "Apply auto-fixable deprecations to this repo's stratt config",
 		Long: `Walk stratt's deprecation registry against the current repo and apply
 every auto-fixable migration.  Deprecations that require manual action
 are listed but not modified.
+
+After a successful migration, stratt offers to bump
+` + "`required_stratt`" + ` to the current binary version so teammates on
+older stratt see the explicit pin error rather than confusing
+unknown-field errors (R2.3.13).  Pass --no-pin-bump to skip the prompt.
 
 See requirements R2.3.9 for the design.`,
 		Args: cobra.NoArgs,
@@ -47,9 +58,64 @@ See requirements R2.3.9 for the design.`,
 			fmt.Fprintf(cmd.OutOrStdout(),
 				"\nSummary: %d auto-fixed, %d require manual action.\n",
 				len(fixed), len(manual))
+
+			// R2.3.13: offer to bump required_stratt after migration.
+			if !skipPinBump {
+				if err := maybeBumpRequiredStratt(cmd, cwd, b, yes); err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "auto-accept the required_stratt pin-bump prompt")
+	cmd.Flags().BoolVar(&skipPinBump, "no-pin-bump", false, "skip the required_stratt pin-bump prompt entirely")
+	return cmd
+}
+
+// maybeBumpRequiredStratt asks (or assumes) whether to set
+// `required_stratt` to the current binary's version after a migration,
+// per R2.3.13.  No-ops for dev builds and for repos without a project
+// config (nowhere to write the pin to).
+func maybeBumpRequiredStratt(cmd *cobra.Command, cwd string, b BuildInfo, autoYes bool) error {
+	if b.Version == "" || b.Version == "dev" {
+		return nil
+	}
+	proj, err := config.Load(cwd)
+	if err != nil || proj == nil || proj.Source == "" {
+		return nil
+	}
+	constraint := fmt.Sprintf(">= %s", b.Version)
+	if proj.RequiredStratt == constraint {
+		return nil
+	}
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out,
+		"\nBump required_stratt to %q in %s? [Y/n] ", constraint, proj.Source)
+
+	run := autoYes
+	if !run {
+		r := bufio.NewReader(cmd.InOrStdin())
+		line, err := r.ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(out, "(no input; skipping)")
+			return nil
+		}
+		switch strings.ToLower(strings.TrimSpace(line)) {
+		case "", "y", "yes":
+			run = true
+		}
+	}
+	if !run {
+		fmt.Fprintln(out, "Skipping pin bump.")
+		return nil
+	}
+	if err := config.SetRequiredStratt(proj.Source, constraint); err != nil {
+		return fmt.Errorf("setting required_stratt: %w", err)
+	}
+	fmt.Fprintf(out, "✓ Set required_stratt = %q in %s\n", constraint, proj.Source)
+	return nil
 }
 
 func newConfigMigrateBumpCmd() *cobra.Command {

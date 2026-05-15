@@ -2,11 +2,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/zebpalmer/stratt/internal/config"
+	"github.com/zebpalmer/stratt/internal/ui"
 	"github.com/zebpalmer/stratt/internal/update"
 	"github.com/zebpalmer/stratt/internal/version"
 )
@@ -16,6 +18,30 @@ type BuildInfo struct {
 	Version string
 	Commit  string
 	Date    string
+}
+
+// styleKey is the unexported context key for the per-invocation
+// ui.Style.  Subcommands fetch it via styleFrom(ctx).
+type styleKey struct{}
+
+func withStyle(ctx context.Context, s *ui.Style) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, styleKey{}, s)
+}
+
+// styleFrom returns the ui.Style stashed by the root PersistentPreRunE.
+// Subcommands invoked outside the root (e.g., in tests) get a default
+// "auto" style bound to stdin/stdout.
+func styleFrom(ctx context.Context) *ui.Style {
+	if ctx == nil {
+		return ui.NewStyle(os.Stdout, os.Stderr, ui.ColorAuto, ui.Normal)
+	}
+	if s, ok := ctx.Value(styleKey{}).(*ui.Style); ok && s != nil {
+		return s
+	}
+	return ui.NewStyle(os.Stdout, os.Stderr, ui.ColorAuto, ui.Normal)
 }
 
 // Run executes the root command and returns the exit code.
@@ -34,6 +60,11 @@ func Run(b BuildInfo) int {
 }
 
 func newRootCmd(b BuildInfo) *cobra.Command {
+	var (
+		verboseCount int
+		quietFlag    bool
+		colorFlag    string
+	)
 	root := &cobra.Command{
 		Use:   "stratt",
 		Short: "The operations chief for your repo",
@@ -51,9 +82,17 @@ for Kubernetes deploys.`,
 		// exempt because users must be able to diagnose pin issues
 		// without first satisfying them.
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			applyVerbosityAndColor(cmd, verboseCount, quietFlag, colorFlag)
 			return runRequiredVersionCheck(cmd, b)
 		},
 	}
+
+	// Global persistent flags (R5.7 / R5.4).  `-v` and `-vv` bump
+	// verbosity; `-q` collapses to quiet; `--color` overrides the
+	// auto-detected TTY behavior.
+	root.PersistentFlags().CountVarP(&verboseCount, "verbose", "v", "verbosity: -v for verbose, -vv for debug")
+	root.PersistentFlags().BoolVarP(&quietFlag, "quiet", "q", false, "suppress non-error output")
+	root.PersistentFlags().StringVar(&colorFlag, "color", "", "color mode: auto | always | never (overrides $NO_COLOR and user config)")
 
 	root.AddCommand(
 		newVersionCmd(b),
@@ -76,6 +115,54 @@ for Kubernetes deploys.`,
 	root.AddCommand(newConfigCmd(b))
 
 	return root
+}
+
+// applyVerbosityAndColor resolves the global -v/-q/--color flags
+// against the user config and stashes the result in the command context
+// for any subcommand that wants to render styled output.
+//
+// User-config layer: `[display] color = "..."` and `[display] verbosity = "..."`.
+// CLI flags win over config.  $NO_COLOR overrides both per the
+// no-color.org convention (already handled inside ui.NewStyle).
+func applyVerbosityAndColor(cmd *cobra.Command, vcount int, quiet bool, colorFlag string) {
+	level := ui.Normal
+	switch {
+	case quiet:
+		level = ui.Quiet
+	case vcount >= 2:
+		level = ui.Debug
+	case vcount == 1:
+		level = ui.Verbose
+	}
+
+	mode := ui.ColorAuto
+	usr, _ := config.LoadUser()
+	if usr != nil && usr.Display != nil {
+		if usr.Display.Color != "" {
+			mode = ui.ParseColorMode(usr.Display.Color)
+		}
+		if usr.Display.Verbosity != "" && !quiet && vcount == 0 {
+			level = parseVerbosityString(usr.Display.Verbosity)
+		}
+	}
+	if colorFlag != "" {
+		mode = ui.ParseColorMode(colorFlag)
+	}
+
+	style := ui.NewStyle(cmd.OutOrStdout(), cmd.ErrOrStderr(), mode, level)
+	cmd.SetContext(withStyle(cmd.Context(), style))
+}
+
+func parseVerbosityString(s string) ui.Level {
+	switch s {
+	case "quiet":
+		return ui.Quiet
+	case "verbose":
+		return ui.Verbose
+	case "debug":
+		return ui.Debug
+	}
+	return ui.Normal
 }
 
 // runRequiredVersionCheck loads project config, enforces

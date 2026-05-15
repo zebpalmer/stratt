@@ -65,9 +65,10 @@ var Registry = []Deprecation{
 			}
 			return err == nil, err
 		},
-		Hint: ".bumpversion.cfg uses the legacy INI format; migrate to .bumpversion.toml or " +
-			"[tool.bumpversion] in pyproject.toml.  stratt's bump engine does not parse INI.",
-		AutoFix: nil, // INI → TOML conversion is non-trivial; manual migration only
+		Hint: ".bumpversion.cfg (INI) is read natively but the format is deprecated upstream. " +
+			"Consider migrating to [tool.bumpversion] in pyproject.toml or .bumpversion.toml " +
+			"for parity with the rest of the fleet.",
+		AutoFix: nil, // INI → TOML migration not automated yet; bump still works against the INI source.
 	},
 }
 

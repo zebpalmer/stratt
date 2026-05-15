@@ -29,6 +29,12 @@ permissions:
   attestations: write   # publish GitHub artifact attestations
   packages: write       # future-proofing if we publish to GHCR
 
+# Force any JavaScript actions (including transitive ones used by
+# composite actions we depend on) onto Node 24 ahead of the June 2026
+# deadline.  Safe to leave in place once Node 24 is the default.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   release:
     runs-on: ubuntu-latest

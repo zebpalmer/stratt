@@ -70,20 +70,27 @@ See requirements R2.4 for the full design.`,
 				return err
 			}
 
-			// Load project config to pick up [release] settings.
+			// Load project + user config to pick up [release] settings.
 			proj, err := config.Load(cwd)
 			if err != nil {
 				return err
 			}
+			usr, _ := config.LoadUser() // user config is best-effort
 
-			// Resolve branch/remote/push: CLI flags > project config > defaults.
+			// Resolve branch/remote/push.
 			//
-			// Cobra's "Changed" semantic distinguishes flag-set-on-CLI from
-			// flag-defaulted, which is what we need so config overrides
-			// only when no flag was explicitly passed.
+			// Precedence (highest first):
+			//   CLI flag  >  project config  >  user config  >  built-in default
+			//
+			// Cobra's `Flags().Changed("name")` distinguishes
+			// flag-explicitly-set from flag-defaulted, which is what we
+			// need so config layers only kick in when the user didn't
+			// pass a flag.
 			branch := branchFlag
 			remote := remoteFlag
 			push := !noPushFlag
+
+			// Project layer.
 			if proj != nil && proj.Release != nil {
 				if !cmd.Flags().Changed("branch") && proj.Release.Branch != "" {
 					branch = proj.Release.Branch
@@ -93,6 +100,14 @@ See requirements R2.4 for the full design.`,
 				}
 				if !cmd.Flags().Changed("no-push") && proj.Release.Push != nil {
 					push = *proj.Release.Push
+				}
+			}
+			// User layer (only applies when project hasn't set the field
+			// AND no CLI flag was passed).
+			if usr != nil && usr.Release != nil {
+				if !cmd.Flags().Changed("no-push") && usr.Release.Push != nil &&
+					(proj == nil || proj.Release == nil || proj.Release.Push == nil) {
+					push = *usr.Release.Push
 				}
 			}
 

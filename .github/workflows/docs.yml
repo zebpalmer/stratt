@@ -31,6 +31,12 @@ concurrency:
   group: docs
   cancel-in-progress: true
 
+# Force any JavaScript actions (including transitive ones used by
+# composite actions we depend on) onto Node 24 ahead of the June 2026
+# deadline.  Safe to leave in place once Node 24 is the default.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -51,7 +57,7 @@ jobs:
         run: hugo --minify
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./docs/public
 
@@ -63,4 +69,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

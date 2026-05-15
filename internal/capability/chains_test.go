@@ -100,6 +100,18 @@ func TestTestChainPythonUV(t *testing.T) {
 	}
 }
 
+// TestLintFixesByDefault — `stratt lint` should run the configured
+// linter in fixing mode where one exists (R2.2).
+func TestLintFixesByDefault(t *testing.T) {
+	pyDir := t.TempDir()
+	touch(t, pyDir, "pyproject.toml")
+	touch(t, pyDir, "uv.lock")
+	if got := New(pyDir).Resolve("lint"); got.Engine == nil ||
+		got.Engine.Name() != "uv run ruff check --fix" {
+		t.Errorf("python lint: got %v", got.Engine)
+	}
+}
+
 // TestTestChainGo — go → `go test ./...`.
 func TestTestChainGo(t *testing.T) {
 	dir := t.TempDir()

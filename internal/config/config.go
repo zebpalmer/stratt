@@ -49,6 +49,10 @@ type Project struct {
 	// [release] table is present; release flow falls back to its own
 	// defaults (branch auto-detection, push enabled).
 	Release *Release
+
+	// Deploy captures the optional [deploy] section.  Nil when absent;
+	// deploy flow falls back to its own defaults.
+	Deploy *Deploy
 }
 
 // Release is the schema for [release] / [tool.stratt.release] (R2.3.6).
@@ -63,8 +67,27 @@ type Release struct {
 	// nil means "use stratt's default" (which is true per R2.4.5).
 	Push *bool
 
+	// Commit controls whether to create the bump commit.  Pointer so
+	// nil means default (true).  `commit = false` is the "review then
+	// merge" workflow.
+	Commit *bool
+
 	// Remote is the git remote to push to.  Empty means "origin".
 	Remote string
+}
+
+// Deploy is the schema for [deploy] / [tool.stratt.deploy].  Mirrors
+// Release's commit/push override pattern and adds a primary_image
+// shortcut for multi-image overlays.
+type Deploy struct {
+	// PrimaryImage is the image name to bump when the overlay has more
+	// than one and the user didn't pass --image.  Empty means "the only
+	// image" if there's exactly one.
+	PrimaryImage string
+
+	// Push / Commit have the same semantics as Release.  Defaults true.
+	Push   *bool
+	Commit *bool
 }
 
 // Task captures the schema for [tasks.NAME] and [helpers.NAME] (R2.6).
@@ -113,12 +136,20 @@ type rawProject struct {
 	Helpers        map[string]rawTask `toml:"helpers"`
 	Bump           *rawBump           `toml:"bump"`
 	Release        *rawRelease        `toml:"release"`
+	Deploy         *rawDeploy         `toml:"deploy"`
 }
 
 type rawRelease struct {
 	Branch string `toml:"branch"`
 	Push   *bool  `toml:"push"`
+	Commit *bool  `toml:"commit"`
 	Remote string `toml:"remote"`
+}
+
+type rawDeploy struct {
+	PrimaryImage string `toml:"primary_image"`
+	Push         *bool  `toml:"push"`
+	Commit       *bool  `toml:"commit"`
 }
 
 type rawTask struct {
@@ -288,7 +319,16 @@ func normalize(raw *rawProject) (*Project, error) {
 		p.Release = &Release{
 			Branch: raw.Release.Branch,
 			Push:   raw.Release.Push,
+			Commit: raw.Release.Commit,
 			Remote: raw.Release.Remote,
+		}
+	}
+
+	if raw.Deploy != nil {
+		p.Deploy = &Deploy{
+			PrimaryImage: raw.Deploy.PrimaryImage,
+			Push:         raw.Deploy.Push,
+			Commit:       raw.Deploy.Commit,
 		}
 	}
 

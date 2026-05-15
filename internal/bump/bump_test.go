@@ -255,8 +255,18 @@ replace = "version = \"{new_version}\""
 	if cfg.CurrentVersion != "0.5.0" {
 		t.Errorf("got %q", cfg.CurrentVersion)
 	}
-	if len(cfg.Files) != 1 || cfg.Files[0].Filename != "pyproject.toml" {
-		t.Errorf("files: %+v", cfg.Files)
+	// User-supplied entry: pyproject.toml.
+	// Auto-added entry: the source file (stratt.toml), so its
+	// `[bump].current_version` stays in sync after bumps.
+	if len(cfg.Files) != 2 {
+		t.Fatalf("expected 2 file entries (user-supplied + auto-source); got %d: %+v",
+			len(cfg.Files), cfg.Files)
+	}
+	if cfg.Files[0].Filename != "pyproject.toml" {
+		t.Errorf("first entry should be user-supplied pyproject.toml; got %+v", cfg.Files[0])
+	}
+	if cfg.Files[1].Filename != "stratt.toml" {
+		t.Errorf("second entry should be auto-added source (stratt.toml); got %+v", cfg.Files[1])
 	}
 }
 
@@ -330,17 +340,22 @@ filename = "VERSION"
 	}
 }
 
-// TestLoadFromBumpversionCfgIsDeprecated — .bumpversion.cfg (INI) emits
-// a deprecation warning and returns no config.
-func TestLoadFromBumpversionCfgIsDeprecated(t *testing.T) {
+// TestLoadFromBumpversionCfgParsesNativelyButWarns — .bumpversion.cfg
+// (INI) is now parsed natively (eight LCG repos still use this format),
+// but stratt emits a deprecation note pointing at the modern TOML
+// formats.
+func TestLoadFromBumpversionCfgParsesNativelyButWarns(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".bumpversion.cfg", "[bumpversion]\ncurrent_version = 1.0.0\n")
 	cfg, warn, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg != nil {
-		t.Errorf("INI cfg should not produce a usable config in v1; got %+v", cfg)
+	if cfg == nil {
+		t.Fatal("INI cfg should produce a usable config")
+	}
+	if cfg.CurrentVersion != "1.0.0" {
+		t.Errorf("current_version: got %q", cfg.CurrentVersion)
 	}
 	if !strings.Contains(warn, ".bumpversion.cfg") {
 		t.Errorf("expected deprecation note; got %q", warn)
@@ -367,6 +382,101 @@ current_version = "1.0.0"
 	}
 	if cfg.CurrentVersion != "9.9.9" {
 		t.Errorf("native [bump] should win; got %q", cfg.CurrentVersion)
+	}
+}
+
+// TestLoadAutoAddsSourceFileWhenNoFilesConfigured — even with no
+// [[bump.files]] entries, the source file is auto-added so that the
+// current_version field is kept in sync across releases.
+func TestLoadAutoAddsSourceFileWhenNoFilesConfigured(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "stratt.toml", `
+[bump]
+current_version = "1.0.0"
+`)
+	cfg, _, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Files) != 1 {
+		t.Fatalf("expected auto-added stratt.toml entry; got %d: %+v",
+			len(cfg.Files), cfg.Files)
+	}
+	if cfg.Files[0].Filename != "stratt.toml" {
+		t.Errorf("auto-added entry should target source file: %+v", cfg.Files[0])
+	}
+}
+
+// TestLoadDoesNotDuplicateSourceFileWhenUserListsIt — if the user has
+// already added the source file to [[bump.files]], we don't auto-add
+// a duplicate.
+func TestLoadDoesNotDuplicateSourceFileWhenUserListsIt(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "stratt.toml", `
+[bump]
+current_version = "1.0.0"
+
+[[bump.files]]
+filename = "stratt.toml"
+search = 'current_version = "{current_version}"'
+replace = 'current_version = "{new_version}"'
+`)
+	cfg, _, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Files) != 1 {
+		t.Errorf("expected 1 entry (user-supplied), got %d: %+v",
+			len(cfg.Files), cfg.Files)
+	}
+}
+
+// TestLoadAutoAddsBumpversionSourceInPyproject — for legacy bumpversion
+// configs in pyproject.toml, the source file (pyproject.toml) is also
+// auto-added so that `[tool.bumpversion].current_version` stays in sync.
+func TestLoadAutoAddsBumpversionSourceInPyproject(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "pyproject.toml", `
+[tool.bumpversion]
+current_version = "1.0.0"
+`)
+	cfg, _, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range cfg.Files {
+		if f.Filename == "pyproject.toml" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected pyproject.toml in auto-added Files: %+v", cfg.Files)
+	}
+}
+
+// TestComputeAutoAddedSourceFileWorksEndToEnd — happy-path integration:
+// loading auto-adds the source, Compute finds it, Apply rewrites it.
+func TestComputeAutoAddedSourceFileWorksEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "stratt.toml", `[bump]
+current_version = "1.0.0"
+`)
+	cfg, _, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Compute(cfg, Patch, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(plan); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(filepath.Join(dir, "stratt.toml"))
+	if !strings.Contains(string(body), `current_version = "1.0.1"`) {
+		t.Errorf("source file's current_version not updated:\n%s", body)
 	}
 }
 

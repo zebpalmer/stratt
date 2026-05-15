@@ -46,12 +46,21 @@ func (r *Resolver) resolveTest() Engine {
 }
 
 // resolveLint — see requirements.md §3 "lint" chain.
+//
+// Stratt is opinionated: `lint` runs the repo's configured linter in
+// its fixing mode where one exists.  We call the tools the repo
+// already opted into, with the configuration the repo already has.
+// Repos that want check-only behavior can override the task in
+// stratt.toml.
 func (r *Resolver) resolveLint() Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"run", "ruff", "check"}}
+		return &execEngine{tool: "uv", argv: []string{"run", "ruff", "check", "--fix"}}
 	case r.HasStack("go") && available("golangci-lint"):
-		return &execEngine{tool: "golangci-lint", argv: []string{"run"}}
+		// golangci-lint's --fix only fixes a subset of linters but is
+		// safe to enable by default; linters that don't support fixing
+		// are no-ops with --fix on.
+		return &execEngine{tool: "golangci-lint", argv: []string{"run", "--fix"}}
 	case r.HasStack("go"):
 		return &execEngine{tool: "go", argv: []string{"vet", "./..."}}
 	case r.HasStack("php"):

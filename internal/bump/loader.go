@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
 )
@@ -30,6 +31,7 @@ func Load(root string) (*Config, string, error) {
 		return nil, "", err
 	} else if cfg != nil {
 		cfg.Source = src
+		ensureSourceInFiles(cfg, root)
 		return cfg, "", nil
 	}
 
@@ -38,6 +40,7 @@ func Load(root string) (*Config, string, error) {
 		return nil, "", err
 	} else if cfg != nil {
 		cfg.Source = src
+		ensureSourceInFiles(cfg, root)
 		return cfg, "", nil
 	}
 
@@ -46,17 +49,70 @@ func Load(root string) (*Config, string, error) {
 		return nil, "", err
 	} else if cfg != nil {
 		cfg.Source = filepath.Join(root, ".bumpversion.toml")
+		ensureSourceInFiles(cfg, root)
 		return cfg, "", nil
 	}
 
-	// 5: .bumpversion.cfg — INI format, emits deprecation warning
-	if exists(filepath.Join(root, ".bumpversion.cfg")) {
-		// We don't implement INI parsing in v1 — the file's presence is
-		// reported as a deprecation that asks the user to migrate.
-		return nil, ".bumpversion.cfg detected; INI format is not parsed natively, please migrate to .bumpversion.toml or [tool.bumpversion] in pyproject.toml", nil
+	// 5: .bumpversion.cfg — INI format.  Parsed natively (eight LCG
+	// repos still use this format) but flagged as deprecated.
+	iniPath := filepath.Join(root, ".bumpversion.cfg")
+	if exists(iniPath) {
+		if cfg, err := loadBumpversionINI(iniPath); err != nil {
+			return nil, "", err
+		} else if cfg != nil {
+			ensureSourceInFiles(cfg, root)
+			return cfg, ".bumpversion.cfg (INI) is parsed but deprecated; migrate to .bumpversion.toml or [tool.bumpversion] in pyproject.toml with `stratt config migrate-bump`", nil
+		}
 	}
 
 	return nil, "", nil
+}
+
+// ensureSourceInFiles guarantees that the bump source file (where
+// current_version was read from) is also in cfg.Files, so the bump
+// engine updates it on every release.
+//
+// Without this, repos that only have `current_version` in their config
+// file (e.g., [bump] in stratt.toml or [tool.bumpversion] in
+// pyproject.toml) would have their `current_version` field stay frozen
+// at the bumped-FROM value — subsequent releases would compute the
+// wrong starting point and silently produce duplicate tags.
+//
+// bump-my-version does this transparently by design.  Our native engine
+// matches that behavior here so existing configs work the same way.
+//
+// The search/replace patterns are format-aware: TOML config has quoted
+// version strings (`current_version = "1.2.3"`), INI config does not
+// (`current_version = 1.2.3`).
+func ensureSourceInFiles(cfg *Config, root string) {
+	if cfg == nil || cfg.Source == "" {
+		return
+	}
+	rel, err := filepath.Rel(root, cfg.Source)
+	if err != nil {
+		rel = filepath.Base(cfg.Source)
+	}
+	for _, f := range cfg.Files {
+		if filepath.Clean(f.Filename) == filepath.Clean(rel) {
+			return // already covered explicitly by the user
+		}
+	}
+	search, replace := defaultSearchReplaceForSource(rel)
+	cfg.Files = append(cfg.Files, FileEntry{
+		Filename: rel,
+		Search:   search,
+		Replace:  replace,
+	})
+}
+
+// defaultSearchReplaceForSource picks the format-correct search/replace
+// templates for the current_version line in the named source file.
+func defaultSearchReplaceForSource(filename string) (search, replace string) {
+	if strings.HasSuffix(filename, ".cfg") || strings.HasSuffix(filename, ".ini") {
+		return `current_version = {current_version}`, `current_version = {new_version}`
+	}
+	// TOML format (pyproject.toml, stratt.toml, .bumpversion.toml, etc.)
+	return `current_version = "{current_version}"`, `current_version = "{new_version}"`
 }
 
 func loadNative(root string) (*Config, string, error) {
