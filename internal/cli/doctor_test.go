@@ -180,9 +180,9 @@ func TestDoctorMissingToolsDedupesAcrossCommands(t *testing.T) {
 	}
 }
 
-// TestDoctorShowsBackendMappingForMultiStack — multi-stack repos (the
-// cartographer-daemon shape) must show the resolved backend for every
-// universal command.  This is the §0 transparency check in test form.
+// TestDoctorShowsBackendMappingForMultiStack — multi-stack repos must
+// show the resolved backend for every universal command.  This is the
+// §0 transparency check in test form.
 func TestDoctorShowsBackendMappingForMultiStack(t *testing.T) {
 	dir := t.TempDir()
 	touch(t, dir, "pyproject.toml")

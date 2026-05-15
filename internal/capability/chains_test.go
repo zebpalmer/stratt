@@ -154,11 +154,10 @@ func TestTestChainGo(t *testing.T) {
 	}
 }
 
-// TestReleaseChainBumpMyVersionInPyproject — the cartographer-daemon
-// pattern: bump-my-version config inside pyproject.toml wins regardless
-// of language.  The release engine is a delegateEngine because
-// `stratt release` is a custom-shape subcommand, not a runner-dispatched
-// universal command.
+// TestReleaseChainBumpMyVersionInPyproject — bump-my-version config
+// inside pyproject.toml wins regardless of language.  The release
+// engine is a delegateEngine because `stratt release` is a
+// custom-shape subcommand, not a runner-dispatched universal command.
 func TestReleaseChainBumpMyVersionInPyproject(t *testing.T) {
 	dir := t.TempDir()
 	touch(t, dir, "pyproject.toml")
@@ -183,7 +182,7 @@ func TestReleaseChainBumpMyVersionInPyproject(t *testing.T) {
 // for .bumpversion.toml (the standalone form used by some repos).
 func TestReleaseChainBumpMyVersionStandaloneFile(t *testing.T) {
 	dir := t.TempDir()
-	touch(t, dir, "go.mod") // Go repo using bump-my-version (cartographer-agent pattern)
+	touch(t, dir, "go.mod") // Go repo using bump-my-version
 	touch(t, dir, ".bumpversion.toml")
 
 	r := New(dir)

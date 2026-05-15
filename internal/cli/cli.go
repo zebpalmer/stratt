@@ -179,15 +179,12 @@ func runRequiredVersionCheck(cmd *cobra.Command, b BuildInfo) error {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		// Best effort: if we can't even read cwd we have bigger problems
-		// downstream; let the command itself surface the issue.
 		return nil
 	}
 
 	proj, err := config.Load(cwd)
 	if err != nil {
-		// Config errors (e.g. ErrConflict) must surface — they're
-		// non-skippable per R2.3.3.
+		// Config errors (e.g. ErrConflict) must surface — non-skippable per R2.3.3.
 		return err
 	}
 
@@ -209,13 +206,8 @@ func runRequiredVersionCheck(cmd *cobra.Command, b BuildInfo) error {
 		}
 	}
 
-	// Update notifier (R4.12).  Two-stage:
-	//   (a) print the cached advisory now — synchronous, no IO race
-	//   (b) refresh the cache in the background for the next invocation
-	//
-	// The brew formula name is passed so the advisory suggests
-	// `brew upgrade zebpalmer/tap/stratt` (fully-qualified, unambiguous)
-	// rather than the bare `brew upgrade stratt`.
+	// Two-stage notifier: print cached advisory synchronously (no IO race),
+	// then refresh the cache in the background for the next invocation.
 	update.NotifyIfBehind(os.Stderr, b.Version, strattBrewFormula)
 	go update.RefreshNotifierState(cmd.Context(), update.Options{
 		Repo:           strattUpstreamRepo,

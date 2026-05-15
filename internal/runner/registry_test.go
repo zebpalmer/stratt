@@ -286,9 +286,8 @@ func TestBuildRegistrySynthesizesAllComposite(t *testing.T) {
 	if all == nil {
 		t.Fatal("expected `all` to be synthesized")
 	}
-	// `all` includes `sync` first to match the LCG Makefile template
-	// (matches `make all`: sync style test).  For a Go repo this is
-	// `sync + format + lint + test`.
+	// `all` includes `sync` first so the env is current before tests.
+	// For a Go repo this is `sync + format + lint + test`.
 	want := []string{"sync", "format", "lint", "test"}
 	if len(all.Tasks) != len(want) {
 		t.Fatalf("tasks: got %v, want %v", all.Tasks, want)

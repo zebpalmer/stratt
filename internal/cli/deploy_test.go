@@ -238,11 +238,11 @@ func TestDeployImageFlagForMultipleImages(t *testing.T) {
 func TestDeployEnvsListsOverlays(t *testing.T) {
 	dir := t.TempDir()
 	writeOverlay(t, dir, "prod", `images:
-  - name: cartographerd
+  - name: myapp
     newTag: 1.14.1
 `)
 	writeOverlay(t, dir, "staging", `images:
-  - name: cartographerd
+  - name: myapp
     newTag: 1.14.0
   - name: sidecar
     newTag: 0.5.2
@@ -261,8 +261,8 @@ func TestDeployEnvsListsOverlays(t *testing.T) {
 	body := out.String()
 	for _, want := range []string{
 		"prod", "staging",
-		"cartographerd:1.14.1",
-		"cartographerd:1.14.0",
+		"myapp:1.14.1",
+		"myapp:1.14.0",
 		"sidecar:0.5.2",
 	} {
 		if !strings.Contains(body, want) {

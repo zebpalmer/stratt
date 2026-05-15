@@ -39,7 +39,7 @@ Examples:
   stratt deploy prod 1.14.1
   stratt deploy staging 1.15.0-rc1 --no-push           # commit locally, push later
   stratt deploy prod 1.14.1 --no-commit                # edit only, no git activity
-  stratt deploy prod 1.14.1 --image=cartographerd      # disambiguate multi-image overlay
+  stratt deploy prod 1.14.1 --image=myapp              # disambiguate multi-image overlay
   stratt deploy envs                                   # list available environments`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {

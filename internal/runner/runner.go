@@ -47,14 +47,10 @@ type Options struct {
 	// engine-only execution paths.
 	Registry *Registry
 
-	// CI suppresses interactive prompts (R5.3 / R5.4).  Currently the
-	// runner has no prompts, so this flag is plumbed through to engines
-	// for their use.  Engines that don't honor CI mode treat it as a
-	// no-op.
+	// CI suppresses interactive prompts; plumbed through to engines.
 	CI bool
 
-	// Quiet suppresses the "→ <engine>" status line.  Useful for piping
-	// engine output to another tool.  Default false.
+	// Quiet suppresses the "→ <engine>" status line; useful for piping output.
 	Quiet bool
 }
 

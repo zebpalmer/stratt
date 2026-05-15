@@ -42,8 +42,7 @@ func LoadState() (*State, error) {
 	}
 	var s State
 	if err := json.Unmarshal(data, &s); err != nil {
-		// Corrupted state file: log via the returned zero-value State
-		// and the caller's choice to either reset or surface the issue.
+		// treat corrupt state as fresh
 		return &State{}, nil
 	}
 	return &s, nil

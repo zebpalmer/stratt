@@ -88,7 +88,6 @@ func BuildRegistry(res *capability.Resolver, proj *config.Project) (*Registry, e
 			}
 		}
 		for name, ut := range proj.Helpers {
-			// Per R2.6.10, helpers cannot use built-in names.
 			if existing, ok := r.tasks[name]; ok && existing.Source == SourceBuiltin {
 				return nil, fmt.Errorf(
 					"helper %q shadows a built-in command; built-ins must be in [tasks], not [helpers] (R2.6.10)",
@@ -100,7 +99,7 @@ func BuildRegistry(res *capability.Resolver, proj *config.Project) (*Registry, e
 		}
 	}
 
-	// Validate the graph: references must resolve, no cycles.
+	// Validate the graph: all references must resolve and the graph must be acyclic.
 	if err := r.validate(); err != nil {
 		return nil, err
 	}

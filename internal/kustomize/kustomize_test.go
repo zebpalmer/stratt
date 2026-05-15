@@ -26,14 +26,14 @@ kind: Kustomization
 resources:
   - ../../base
 images:
-  - name: cartographerd
+  - name: myapp
     newTag: 1.14.0
 `)
 	change, err := SetImage(path, "", "1.14.1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if change.Image != "cartographerd" || change.OldTag != "1.14.0" || change.NewTag != "1.14.1" {
+	if change.Image != "myapp" || change.OldTag != "1.14.0" || change.NewTag != "1.14.1" {
 		t.Errorf("change: %+v", change)
 	}
 	body, _ := os.ReadFile(path)
@@ -146,11 +146,11 @@ configMapGenerator:
     literals:
       - LOG_LEVEL=info
 images:
-  - name: cartographerd
+  - name: myapp
     newTag: 1.14.0
 `
 	path := writeOverlay(t, dir, "prod", original)
-	if _, err := SetImage(path, "cartographerd", "1.14.1"); err != nil {
+	if _, err := SetImage(path, "myapp", "1.14.1"); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(path)
@@ -161,7 +161,7 @@ images:
 		"namespace: production",
 		"- ingress.yaml",
 		"LOG_LEVEL=info",
-		"name: cartographerd",
+		"name: myapp",
 	} {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("lost content %q:\n%s", fragment, got)

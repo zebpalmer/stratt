@@ -66,7 +66,7 @@ func fetchLatestStable(ctx context.Context, client *http.Client, repo string) (*
 		return nil, err
 	}
 	if rel.Prerelease || rel.Draft {
-		// Shouldn't happen because /latest filters, but defense in depth.
+		// /latest should filter these server-side, but guard against API drift.
 		return nil, ErrNoRelease
 	}
 	return rel, nil

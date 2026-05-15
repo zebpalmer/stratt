@@ -341,9 +341,9 @@ filename = "VERSION"
 }
 
 // TestLoadFromBumpversionCfgParsesNativelyButWarns — .bumpversion.cfg
-// (INI) is now parsed natively (eight LCG repos still use this format),
-// but stratt emits a deprecation note pointing at the modern TOML
-// formats.
+// (INI) is parsed natively for back-compat with legacy bump2version
+// configs, but stratt emits a deprecation note pointing at the modern
+// TOML formats.
 func TestLoadFromBumpversionCfgParsesNativelyButWarns(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".bumpversion.cfg", "[bumpversion]\ncurrent_version = 1.0.0\n")

@@ -22,10 +22,7 @@ func newLintCmd() *cobra.Command {
 fixing mode (e.g. ` + "`ruff check --fix`" + `, ` + "`golangci-lint run --fix`" + `).
 
 Pass ` + "`--check`" + ` to skip the fix step and only report findings — useful
-in CI where any change to the working tree would be undesirable.
-
-This mirrors the ` + "`lint`" + ` and ` + "`lint-check`" + ` targets from the LCG Makefile
-template (lint-check = stratt lint --check).`,
+in CI where any change to the working tree would be undesirable.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()

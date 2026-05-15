@@ -164,7 +164,7 @@ func TestDetectHugoAbsent(t *testing.T) {
 	}
 }
 
-// TestScanMultiStack mirrors the cartographer-daemon shape:
+// TestScanMultiStack covers a representative multi-stack repo:
 // python+uv + docker + kustomize + mkdocs.  Names should come back
 // sorted alphabetically per Scan's contract.
 func TestScanMultiStack(t *testing.T) {

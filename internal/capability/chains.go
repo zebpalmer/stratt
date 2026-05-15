@@ -13,16 +13,11 @@ import (
 )
 
 // uvAllFlags are the flags stratt passes to `uv run` and `uv sync` in
-// Python+UV projects.  Mirrors the LCG Makefile template: `--all-extras
-// --all-groups` ensures every optional-dependency extras and every
-// dependency group is included.  Without these, uv only resolves the
-// default (non-grouped) deps — silently skipping anything declared in
+// Python+UV projects.  Without these, uv only resolves the default
+// (non-grouped) deps — silently skipping anything declared in
 // `[project.optional-dependencies]` or `[tool.uv.dependency-groups]`.
-//
-// This is a fleet-wide assumption: LCG repos rely on extras/groups for
-// their dev/test/docs tooling and the Makefiles have been passing
-// these flags consistently.  Anything less would be a regression for
-// existing repos.
+// Projects commonly use extras/groups for dev/test/docs tooling, so
+// stratt opts into the full set by default.
 var uvAllFlags = []string{"--all-extras", "--all-groups"}
 
 // resolveBuild — see requirements.md §3 "build" chain.
@@ -274,10 +269,9 @@ func (r *Resolver) resolveStyle() Engine {
 // want a narrower set.
 //
 // Membership: sync, format, lint, test, docs (in that order, each
-// included only if its constituent engine resolves).  Including `sync`
-// first matches the LCG Makefile's `all` target which ensures the env
-// is current before tests — also implicitly covers the "uv.lock
-// consistent with pyproject.toml" check Make ran via dry-run.
+// included only if its constituent engine resolves).  `sync` runs
+// first so the env is current before tests — implicitly covers the
+// "uv.lock consistent with pyproject.toml" check.
 func (r *Resolver) resolveAll() Engine {
 	var members []string
 	if r.resolveSync() != nil {
@@ -308,7 +302,7 @@ func (r *Resolver) resolveAll() Engine {
 	return &compositeEngine{display: display, members: members}
 }
 
-// fileExists returns true if any of the given files exist in the repo root.
+// fileExists reports whether any of the given filenames exist in the repo root.
 func (r *Resolver) fileExists(names ...string) bool {
 	for _, n := range names {
 		if _, err := os.Stat(filepath.Join(r.root, n)); err == nil {

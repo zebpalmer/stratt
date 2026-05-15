@@ -5,10 +5,9 @@ package cli
 // to surface actionable next steps when a resolved engine's binary
 // isn't on `$PATH`.
 //
-// Defaults lean macOS/Homebrew because that's the LCG fleet's primary
-// dev platform.  Where brew isn't appropriate (Python tools), suggest
-// `uv tool install` since uv is already the assumed Python toolchain
-// for stratt-aware repos.
+// Defaults lean macOS/Homebrew.  Where brew isn't appropriate (Python
+// tools), suggest `uv tool install` since uv is already the assumed
+// Python toolchain for stratt-aware repos.
 //
 // New entries are welcome — keep the value short enough that the
 // `tool → suggestion` table stays readable on an 80-col terminal.

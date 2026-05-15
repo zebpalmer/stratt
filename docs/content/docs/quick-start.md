@@ -104,7 +104,7 @@ Disable a built-in entirely with `enabled = false`.
 
 ## 5. Release
 
-For repos with `[tool.bumpversion]` (the standard LCG pattern) or `[bump]` in `stratt.toml`:
+For repos with `[tool.bumpversion]` or `[bump]` in `stratt.toml`:
 
 ```sh
 stratt release            # interactive — prompts for patch/minor/major

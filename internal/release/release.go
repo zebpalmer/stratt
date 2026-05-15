@@ -45,8 +45,7 @@ type Options struct {
 	// HEAD is on a different branch than the resolved value.
 	Branch string
 
-	// Push controls whether to push commit + tag to origin after the
-	// local bump.  Default true per R2.4.5.
+	// Push controls whether to push commit + tag to origin after the bump.
 	Push bool
 
 	// Remote is the git remote to push to.  Default "origin".
@@ -56,8 +55,7 @@ type Options struct {
 	// produces a fully non-interactive release.
 	CI bool
 
-	// AssumeYes skips final confirmation prompts (but not the major-bump
-	// confirmation gate, which requires explicit input per R2.4.2.4).
+	// AssumeYes skips final confirmation prompts (major-bump gate still requires explicit input).
 	AssumeYes bool
 
 	// Stdin / Stdout / Stderr — required.  Stdin must be a terminal-like
@@ -107,7 +105,6 @@ func Run(ctx context.Context, opts Options) error {
 		fmt.Fprintf(opts.Stderr, "→ release branch: %s (auto-detected)\n", opts.Branch)
 	}
 
-	// Pre-flight gates (R2.4.1).
 	if err := preflight(ctx, repo, opts); err != nil {
 		return err
 	}
@@ -205,15 +202,13 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	// Tag (R2.4.5 controls push, not tag; tag follows the bump config).
+	// tag follows cfg.Tag regardless of push setting
 	if cfg.Tag {
 		if err := repo.Tag(ctx, plan.TagName, plan.CommitMessage); err != nil {
 			return err
 		}
 	}
 
-	// Push commit + tag.  Surface each push step clearly so the user
-	// sees confirmation that the remote actually received the release.
 	if opts.Push {
 		fmt.Fprintf(opts.Stdout, "→ pushing commit to %s/%s\n", opts.Remote, opts.Branch)
 		if err := repo.PushBranch(ctx, opts.Remote, opts.Branch); err != nil {

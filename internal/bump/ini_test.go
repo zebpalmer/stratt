@@ -74,9 +74,9 @@ func TestParseINIBool(t *testing.T) {
 	}
 }
 
-// TestLoadBumpversionINIFleetExample — mirrors the actual format
-// found in wraith-daemon and other LCG repos as of 2026-05.
-func TestLoadBumpversionINIFleetExample(t *testing.T) {
+// TestLoadBumpversionINIRealWorldExample — mirrors the actual format
+// found in legacy bump2version configs in the wild.
+func TestLoadBumpversionINIRealWorldExample(t *testing.T) {
 	dir := t.TempDir()
 	writeCfg(t, dir, ".bumpversion.cfg", `[bumpversion]
 current_version = 0.9.6
@@ -84,7 +84,7 @@ commit = True
 tag = True
 tag_name = {new_version}
 
-[bumpversion:file:./wraithd/__init__.py]
+[bumpversion:file:./myapp/__init__.py]
 search = __version__ = "{current_version}"
 replace = __version__ = "{new_version}"
 `)
@@ -113,24 +113,24 @@ replace = __version__ = "{new_version}"
 	if len(cfg.Files) != 2 {
 		t.Fatalf("expected 2 files (user + auto-source); got %d: %+v", len(cfg.Files), cfg.Files)
 	}
-	// Find the user-supplied wraithd/__init__.py entry.
-	var wraithd *FileEntry
+	// Find the user-supplied myapp/__init__.py entry.
+	var myapp *FileEntry
 	for i := range cfg.Files {
-		if strings.Contains(cfg.Files[i].Filename, "wraithd") {
-			wraithd = &cfg.Files[i]
+		if strings.Contains(cfg.Files[i].Filename, "myapp") {
+			myapp = &cfg.Files[i]
 			break
 		}
 	}
-	if wraithd == nil {
-		t.Fatalf("expected wraithd entry in Files: %+v", cfg.Files)
+	if myapp == nil {
+		t.Fatalf("expected myapp entry in Files: %+v", cfg.Files)
 	}
 	want := FileEntry{
-		Filename: "wraithd/__init__.py",
+		Filename: "myapp/__init__.py",
 		Search:   `__version__ = "{current_version}"`,
 		Replace:  `__version__ = "{new_version}"`,
 	}
-	if !reflect.DeepEqual(*wraithd, want) {
-		t.Errorf("wraithd entry:\n  got:  %+v\n  want: %+v", *wraithd, want)
+	if !reflect.DeepEqual(*myapp, want) {
+		t.Errorf("myapp entry:\n  got:  %+v\n  want: %+v", *myapp, want)
 	}
 }
 
