@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -23,9 +24,15 @@ Always removes:
 
 Per stack:
   go        → ./bin
-  python+uv → dist/, .pytest_cache/, **/__pycache__
+  python+uv → .venv/, build/, dist/, *.egg-info, .pytest_cache/,
+              .ruff_cache/, .coverage, htmlcov/, **/__pycache__, and
+              ` + "`uv cache clean`" + ` to drop the global uv download cache
+  mkdocs    → site/
+  sphinx    → docs/_build/, docs/_autosummary/
+  hugo      → <hugo source>/public/
 
-Does not touch Docker images by default (requires --docker explicitly).`,
+Does not touch Docker images by default (requires --docker explicitly).
+After cleaning a python+uv repo, run ` + "`stratt setup`" + ` to rebuild .venv.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -36,16 +43,38 @@ Does not touch Docker images by default (requires --docker explicitly).`,
 			report := detect.Scan(cwd)
 
 			targets := []string{filepath.Join(cwd, ".stratt", "cache")}
+			needPycache := false
+			needEggInfo := false
+			needUVCacheClean := false
 			for _, s := range report.Stacks {
 				switch s.Name {
 				case "go":
 					targets = append(targets, filepath.Join(cwd, "bin"))
 				case "python+uv":
 					targets = append(targets,
+						filepath.Join(cwd, ".venv"),
+						filepath.Join(cwd, "build"),
 						filepath.Join(cwd, "dist"),
 						filepath.Join(cwd, ".pytest_cache"),
+						filepath.Join(cwd, ".ruff_cache"),
+						filepath.Join(cwd, ".coverage"),
+						filepath.Join(cwd, "htmlcov"),
 					)
-					// Recursive __pycache__ removal happens below.
+					needPycache = true
+					needEggInfo = true
+					needUVCacheClean = true
+				case "mkdocs":
+					targets = append(targets, filepath.Join(cwd, "site"))
+				case "sphinx":
+					targets = append(targets,
+						filepath.Join(cwd, "docs", "_build"),
+						filepath.Join(cwd, "docs", "_autosummary"),
+					)
+				case "hugo":
+					src := detect.FindHugoSource(cwd)
+					if src != "" {
+						targets = append(targets, filepath.Join(cwd, src, "public"))
+					}
 				}
 			}
 			for _, p := range targets {
@@ -55,19 +84,66 @@ Does not touch Docker images by default (requires --docker explicitly).`,
 				fmt.Fprintf(out, "removed %s\n", relTo(cwd, p))
 			}
 
-			// __pycache__ recursive cleanup for python+uv.
-			for _, s := range report.Stacks {
-				if s.Name != "python+uv" {
-					continue
-				}
+			if needPycache {
 				if err := removePycache(cwd, out); err != nil {
 					return err
 				}
-				break
+			}
+			if needEggInfo {
+				if err := removeEggInfo(cwd, out); err != nil {
+					return err
+				}
+			}
+			if needUVCacheClean {
+				runUVCacheClean(cmd, out)
 			}
 			return nil
 		},
 	}
+}
+
+// runUVCacheClean shells out to `uv cache clean` to drop the global
+// download cache for python+uv repos.  Best effort — if uv isn't on
+// PATH, log it and move on rather than failing clean.
+func runUVCacheClean(cmd *cobra.Command, out interface{ Write([]byte) (int, error) }) {
+	if _, err := exec.LookPath("uv"); err != nil {
+		fmt.Fprintln(out, "skipped uv cache clean (uv not on PATH)")
+		return
+	}
+	c := exec.CommandContext(cmd.Context(), "uv", "cache", "clean")
+	c.Stdout = out
+	c.Stderr = out
+	if err := c.Run(); err != nil {
+		fmt.Fprintf(out, "uv cache clean: %v (continuing)\n", err)
+		return
+	}
+	fmt.Fprintln(out, "cleaned uv cache")
+}
+
+// removeEggInfo walks cwd and removes any *.egg-info directories.
+// Mirrors what Make's `rm -rf *.egg-info` does but recurses, catching
+// nested packages.
+func removeEggInfo(root string, log interface{ Write([]byte) (int, error) }) error {
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		// Don't descend into VCS/venv directories — keeps the walk fast
+		// and avoids touching anything inside .git or .venv.
+		if info.IsDir() {
+			switch info.Name() {
+			case ".git", ".venv", "node_modules":
+				return filepath.SkipDir
+			}
+			if filepath.Ext(info.Name()) == ".egg-info" {
+				if rmErr := os.RemoveAll(path); rmErr == nil {
+					fmt.Fprintf(log, "removed %s\n", relTo(root, path))
+				}
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
 }
 
 // removePycache walks cwd and removes every __pycache__ directory it

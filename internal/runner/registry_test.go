@@ -286,7 +286,10 @@ func TestBuildRegistrySynthesizesAllComposite(t *testing.T) {
 	if all == nil {
 		t.Fatal("expected `all` to be synthesized")
 	}
-	want := []string{"format", "lint", "test"}
+	// `all` includes `sync` first to match the LCG Makefile template
+	// (matches `make all`: sync style test).  For a Go repo this is
+	// `sync + format + lint + test`.
+	want := []string{"sync", "format", "lint", "test"}
 	if len(all.Tasks) != len(want) {
 		t.Fatalf("tasks: got %v, want %v", all.Tasks, want)
 	}
@@ -311,7 +314,7 @@ func TestBuildRegistryAllIncludesDocsWhenPresent(t *testing.T) {
 	if all == nil {
 		t.Fatal("expected `all` to be synthesized")
 	}
-	want := []string{"format", "lint", "test", "docs"}
+	want := []string{"sync", "format", "lint", "test", "docs"}
 	if len(all.Tasks) != len(want) {
 		t.Fatalf("tasks: got %v, want %v", all.Tasks, want)
 	}
@@ -368,9 +371,10 @@ func TestBuildRegistryAllOverrideReplacesEntirely(t *testing.T) {
 	if all == nil {
 		t.Fatal("expected `all`")
 	}
-	// User's `format` comes first, then the existing composite's [format, lint, test].
-	// Duplicates are fine — RunTask runs each in order.
-	want := []string{"format", "format", "lint", "test"}
+	// User's `format` comes first, then the existing composite's
+	// [sync, format, lint, test] for a Go repo.  Duplicates are fine
+	// — RunTask runs each in order.
+	want := []string{"format", "sync", "format", "lint", "test"}
 	if len(all.Tasks) != len(want) {
 		t.Errorf("augmented `all`: got %v, want %v", all.Tasks, want)
 	}

@@ -106,6 +106,7 @@ for Kubernetes deploys.`,
 	for _, spec := range universalSpecs {
 		root.AddCommand(newUniversalCmd(spec))
 	}
+	root.AddCommand(newLintCmd())
 	root.AddCommand(newRunCmd())
 	root.AddCommand(newReleaseCmd())
 	root.AddCommand(newDeployCmd())

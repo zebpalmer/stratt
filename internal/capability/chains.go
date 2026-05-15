@@ -12,6 +12,19 @@ import (
 	"github.com/zebpalmer/stratt/internal/detect"
 )
 
+// uvAllFlags are the flags stratt passes to `uv run` and `uv sync` in
+// Python+UV projects.  Mirrors the LCG Makefile template: `--all-extras
+// --all-groups` ensures every optional-dependency extras and every
+// dependency group is included.  Without these, uv only resolves the
+// default (non-grouped) deps — silently skipping anything declared in
+// `[project.optional-dependencies]` or `[tool.uv.dependency-groups]`.
+//
+// This is a fleet-wide assumption: LCG repos rely on extras/groups for
+// their dev/test/docs tooling and the Makefiles have been passing
+// these flags consistently.  Anything less would be a regression for
+// existing repos.
+var uvAllFlags = []string{"--all-extras", "--all-groups"}
+
 // resolveBuild — see requirements.md §3 "build" chain.
 func (r *Resolver) resolveBuild() Engine {
 	switch {
@@ -36,7 +49,7 @@ func (r *Resolver) resolveBuild() Engine {
 func (r *Resolver) resolveTest() Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"run", "pytest"}}
+		return &execEngine{tool: "uv", argv: append([]string{"run"}, append(uvAllFlags, "pytest")...)}
 	case r.HasStack("go"):
 		return &execEngine{tool: "go", argv: []string{"test", "./..."}}
 	case r.HasStack("php"):
@@ -52,18 +65,38 @@ func (r *Resolver) resolveTest() Engine {
 // Stratt is opinionated: `lint` runs the repo's configured linter in
 // its fixing mode where one exists.  We call the tools the repo
 // already opted into, with the configuration the repo already has.
-// Repos that want check-only behavior can override the task in
-// stratt.toml.
+// Repos that want check-only behavior (typical for CI) use
+// `stratt lint --check`, which dispatches to ResolveLintCheck.
 func (r *Resolver) resolveLint() Engine {
+	return r.lintEngine(true)
+}
+
+// ResolveLintCheck is the check-only sibling to lint resolution — same
+// chain, same tool family, but with the auto-fix flag stripped.  Used
+// by `stratt lint --check` for CI where you want a non-mutating gate.
+func (r *Resolver) ResolveLintCheck() Engine {
+	return r.lintEngine(false)
+}
+
+// lintEngine factors the chain so both modes share the same matching
+// logic.  Passing fix=false yields the check-only invocation.
+func (r *Resolver) lintEngine(fix bool) Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"run", "ruff", "check", "--fix"}}
+		argv := append([]string{"run"}, uvAllFlags...)
+		argv = append(argv, "ruff", "check")
+		if fix {
+			argv = append(argv, "--fix")
+		}
+		return &execEngine{tool: "uv", argv: argv}
 	case r.HasStack("go") && available("golangci-lint"):
-		// golangci-lint's --fix only fixes a subset of linters but is
-		// safe to enable by default; linters that don't support fixing
-		// are no-ops with --fix on.
-		return &execEngine{tool: "golangci-lint", argv: []string{"run", "--fix"}}
+		argv := []string{"run"}
+		if fix {
+			argv = append(argv, "--fix")
+		}
+		return &execEngine{tool: "golangci-lint", argv: argv}
 	case r.HasStack("go"):
+		// `go vet` has no fix mode; the flag is a no-op for it.
 		return &execEngine{tool: "go", argv: []string{"vet", "./..."}}
 	case r.HasStack("php"):
 		return &execEngine{tool: "composer", argv: []string{"lint"}}
@@ -75,18 +108,25 @@ func (r *Resolver) resolveLint() Engine {
 func (r *Resolver) resolveFormat() Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"run", "ruff", "format"}}
+		return &execEngine{tool: "uv", argv: append([]string{"run"}, append(uvAllFlags, "ruff", "format")...)}
 	case r.HasStack("go"):
 		return &execEngine{tool: "gofmt", argv: []string{"-w", "."}, display: "gofmt -w ."}
 	}
 	return nil
 }
 
-// resolveSetup — first-time project setup.
+// resolveSetup — first-time project setup.  For python+uv, also tries
+// `uv self update` first so the user's uv binary stays current.  Soft
+// failure (`;` not `&&`) so brew-installed uv (which can't self-update)
+// keeps working — the user sees a one-line "use brew upgrade uv" note
+// but the sync still runs.
 func (r *Resolver) resolveSetup() Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"sync", "--all-extras"}}
+		return &shellEngine{
+			line:    "uv self update; uv sync --all-extras --all-groups",
+			display: "uv self update (best-effort) && uv sync --all-extras --all-groups",
+		}
 	case r.HasStack("go"):
 		return &execEngine{tool: "go", argv: []string{"mod", "download"}}
 	case r.HasStack("php"):
@@ -99,7 +139,7 @@ func (r *Resolver) resolveSetup() Engine {
 func (r *Resolver) resolveSync() Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"sync"}}
+		return &execEngine{tool: "uv", argv: append([]string{"sync"}, uvAllFlags...)}
 	case r.HasStack("go"):
 		return &execEngine{tool: "go", argv: []string{"mod", "download"}}
 	case r.HasStack("php"):
@@ -121,12 +161,17 @@ func (r *Resolver) resolveLock() Engine {
 	return nil
 }
 
-// resolveUpgrade — upgrade all dependencies.  The Go path is a
-// composite shell line because it's a two-step idiom.
+// resolveUpgrade — upgrade all dependencies, then re-sync so the local
+// env reflects the upgraded lockfile.  For python+uv, also tries
+// `uv self update` first (best effort, see resolveSetup).  Mirrors
+// Make's `upgrade` plus the SETUP_EXTRAS `uv-self-update` semantic.
 func (r *Resolver) resolveUpgrade() Engine {
 	switch {
 	case r.HasStack("python+uv"):
-		return &execEngine{tool: "uv", argv: []string{"lock", "--upgrade"}}
+		return &shellEngine{
+			line:    "uv self update; uv lock --upgrade && uv sync --all-extras --all-groups",
+			display: "uv self update (best-effort) && uv lock --upgrade && uv sync --all-extras --all-groups",
+		}
 	case r.HasStack("go"):
 		return &shellEngine{line: "go get -u ./... && go mod tidy", display: "go get -u ./... && go mod tidy"}
 	case r.HasStack("php"):
@@ -195,7 +240,10 @@ func (r *Resolver) resolveDocs() Engine {
 	case r.HasStack("mkdocs"):
 		return &execEngine{tool: "mkdocs", argv: []string{"build"}}
 	case r.HasStack("sphinx"):
-		return &execEngine{tool: "sphinx-build", argv: []string{"docs", "_build/html"}}
+		// Output to docs/_build/html (matches Make's `cd docs && sphinx-build -b html . _build/html`).
+		// Keeping the build output inside docs/ means `stratt clean`'s
+		// docs/_build/ removal path picks it up uniformly.
+		return &execEngine{tool: "sphinx-build", argv: []string{"-b", "html", "docs", "docs/_build/html"}}
 	case r.HasStack("hugo"):
 		src := detect.FindHugoSource(r.root)
 		argv := []string{"--minify"}
@@ -225,10 +273,16 @@ func (r *Resolver) resolveStyle() Engine {
 // default; users override via [tasks.all] in stratt.toml when they
 // want a narrower set.
 //
-// Membership: format, lint, test, docs (in that order, each included
-// only if its constituent engine resolves).
+// Membership: sync, format, lint, test, docs (in that order, each
+// included only if its constituent engine resolves).  Including `sync`
+// first matches the LCG Makefile's `all` target which ensures the env
+// is current before tests — also implicitly covers the "uv.lock
+// consistent with pyproject.toml" check Make ran via dry-run.
 func (r *Resolver) resolveAll() Engine {
 	var members []string
+	if r.resolveSync() != nil {
+		members = append(members, "sync")
+	}
 	if r.resolveFormat() != nil {
 		members = append(members, "format")
 	}

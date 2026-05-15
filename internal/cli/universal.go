@@ -26,9 +26,10 @@ import (
 // user-defined overrides/augments of a built-in (e.g. `[tasks.test]
 // run = "..."`) automatically apply when the user types `stratt test`.
 type universalSpec struct {
-	name  string
-	short string
-	long  string
+	name    string
+	short   string
+	long    string
+	aliases []string // Cobra-level aliases (e.g. "install" for "sync")
 }
 
 // universalSpecs enumerates the universal commands wired through the
@@ -38,11 +39,15 @@ type universalSpec struct {
 var universalSpecs = []universalSpec{
 	{name: "build", short: "Build the project using the detected toolchain"},
 	{name: "test", short: "Run tests using the detected test runner"},
-	{name: "lint", short: "Run linters using the detected linter"},
+	// "lint" is registered separately by newLintCmd because it needs a
+	// custom --check flag for CI use (mirrors the Makefile template's
+	// `lint-check` target).
 	{name: "format", short: "Run formatters using the detected formatter"},
 	{name: "style", short: "Run formatters and linters together (format + lint)"},
 	{name: "setup", short: "Perform first-time project setup"},
-	{name: "sync", short: "Sync dependencies from the project's lockfile"},
+	// `install` is a Cobra alias for `sync` (muscle memory from the
+	// Makefile template).  Wired below.
+	{name: "sync", short: "Sync dependencies from the project's lockfile", aliases: []string{"install"}},
 	{name: "lock", short: "Update the project's lockfile from its manifest"},
 	{name: "upgrade", short: "Upgrade all dependencies to their latest compatible versions"},
 	{name: "all", short: "Run the full verification suite (everything detected)"},
@@ -56,10 +61,11 @@ func newUniversalCmd(spec universalSpec) *cobra.Command {
 		long = spec.short + ".\n\nThe backend is selected by detection (see `stratt doctor`)."
 	}
 	return &cobra.Command{
-		Use:   spec.name,
-		Short: spec.short,
-		Long:  long,
-		Args:  cobra.NoArgs,
+		Use:     spec.name,
+		Aliases: spec.aliases,
+		Short:   spec.short,
+		Long:    long,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {

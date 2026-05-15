@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/zebpalmer/stratt/internal/detect"
@@ -15,13 +16,77 @@ import (
 func newDocsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
-		Short: "Build or serve project documentation",
-		Long:  `Subcommands dispatch to the detected docs toolchain (MkDocs or Sphinx).`,
+		Short: "Build, serve, or clean project documentation",
+		Long:  `Subcommands dispatch to the detected docs toolchain (MkDocs, Sphinx, or Hugo).`,
 	}
 	cmd.AddCommand(newDocsActionCmd("build"))
 	cmd.AddCommand(newDocsActionCmd("serve"))
+	cmd.AddCommand(newDocsCleanCmd())
 	return cmd
 }
+
+// newDocsCleanCmd implements `stratt docs clean` — removes just the
+// docs build artifacts (not the rest of `stratt clean`'s targets).
+// Useful when you want a clean docs rebuild without touching the
+// venv / caches.
+func newDocsCleanCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clean",
+		Short: "Remove the documentation build artifacts",
+		Long: `Removes only the docs output directories for the detected toolchain.
+
+  mkdocs    → site/
+  sphinx    → docs/_build/, docs/_autosummary/
+  hugo      → <hugo source>/public/
+
+Useful when you want to force a clean docs rebuild without running the
+full ` + "`stratt clean`" + ` (which also drops .venv, caches, etc.).`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			report := detect.Scan(cwd)
+
+			var targets []string
+			for _, s := range report.Stacks {
+				switch s.Name {
+				case "mkdocs":
+					targets = append(targets, filepath.Join(cwd, "site"))
+				case "sphinx":
+					targets = append(targets,
+						filepath.Join(cwd, "docs", "_build"),
+						filepath.Join(cwd, "docs", "_autosummary"),
+					)
+				case "hugo":
+					if src := detect.FindHugoSource(cwd); src != "" {
+						targets = append(targets, filepath.Join(cwd, src, "public"))
+					}
+				}
+			}
+			if len(targets) == 0 {
+				return errNoDocsToolchain
+			}
+			for _, p := range targets {
+				if err := os.RemoveAll(p); err != nil {
+					return fmt.Errorf("rm -rf %s: %w", p, err)
+				}
+				rel, _ := filepath.Rel(cwd, p)
+				if rel == "" {
+					rel = p
+				}
+				fmt.Fprintf(out, "removed %s\n", rel)
+			}
+			return nil
+		},
+	}
+}
+
+// errNoDocsToolchain is returned by `stratt docs clean` when no docs
+// stack is detected.
+var errNoDocsToolchain = errors.New("no docs toolchain detected (looked for mkdocs.yml, docs/conf.py, or hugo.{toml,yaml,yml,json})")
 
 func newDocsActionCmd(action string) *cobra.Command {
 	return &cobra.Command{

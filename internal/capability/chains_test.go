@@ -95,7 +95,7 @@ func TestTestChainPythonUV(t *testing.T) {
 
 	r := New(dir)
 	got := r.Resolve("test")
-	if got.Engine == nil || got.Engine.Name() != "uv run pytest" {
+	if got.Engine == nil || got.Engine.Name() != "uv run --all-extras --all-groups pytest" {
 		t.Errorf("got %v", got.Engine)
 	}
 }
@@ -107,8 +107,38 @@ func TestLintFixesByDefault(t *testing.T) {
 	touch(t, pyDir, "pyproject.toml")
 	touch(t, pyDir, "uv.lock")
 	if got := New(pyDir).Resolve("lint"); got.Engine == nil ||
-		got.Engine.Name() != "uv run ruff check --fix" {
+		got.Engine.Name() != "uv run --all-extras --all-groups ruff check --fix" {
 		t.Errorf("python lint: got %v", got.Engine)
+	}
+}
+
+// TestLintCheckOnlyDropsFix — ResolveLintCheck returns the same chain
+// but with the auto-fix flag stripped (mirrors `make lint-check`).
+func TestLintCheckOnlyDropsFix(t *testing.T) {
+	pyDir := t.TempDir()
+	touch(t, pyDir, "pyproject.toml")
+	touch(t, pyDir, "uv.lock")
+	got := New(pyDir).ResolveLintCheck()
+	if got == nil {
+		t.Fatal("expected check-only engine")
+	}
+	if got.Name() != "uv run --all-extras --all-groups ruff check" {
+		t.Errorf("got %q", got.Name())
+	}
+}
+
+// TestLintCheckOnlyGolangciLint — Go path also strips --fix.
+func TestLintCheckOnlyGolangciLint(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "go.mod")
+	got := New(dir).ResolveLintCheck()
+	if got == nil {
+		t.Fatal("expected engine")
+	}
+	// On environments where golangci-lint isn't on PATH the chain falls
+	// through to `go vet`, which has no fix flag to strip; that's fine.
+	if got.Name() != "golangci-lint run" && got.Name() != "go vet ./..." {
+		t.Errorf("unexpected check engine: %q", got.Name())
 	}
 }
 
@@ -241,7 +271,8 @@ func TestDocsChainMkDocsAndSphinx(t *testing.T) {
 
 	sphinx := t.TempDir()
 	touch(t, sphinx, "docs/conf.py")
-	if got := New(sphinx).Resolve("docs"); got.Engine == nil || got.Engine.Name() != "sphinx-build docs _build/html" {
+	// Output to docs/_build/html so `stratt clean`'s sphinx target picks it up.
+	if got := New(sphinx).Resolve("docs"); got.Engine == nil || got.Engine.Name() != "sphinx-build -b html docs docs/_build/html" {
 		t.Errorf("sphinx: got %v", got.Engine)
 	}
 }

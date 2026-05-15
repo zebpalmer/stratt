@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -75,6 +77,61 @@ func TestDocsCommandSelectsHugoInDocsSubdir(t *testing.T) {
 	}
 	if tool != "hugo" || argv[0] != "server" {
 		t.Errorf("serve: got %s %v", tool, argv)
+	}
+}
+
+// TestDocsCleanMkDocs — `stratt docs clean` for mkdocs removes site/.
+func TestDocsCleanMkDocs(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "mkdocs.yml")
+	siteDir := dir + "/site"
+	if err := os.MkdirAll(siteDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	withCwd(t, dir)
+
+	cmd := newDocsCleanCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(siteDir); !os.IsNotExist(err) {
+		t.Errorf("site/ should be removed: stat err=%v", err)
+	}
+}
+
+// TestDocsCleanHugo — `stratt docs clean` for hugo removes <src>/public.
+func TestDocsCleanHugo(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "docs/hugo.toml")
+	publicDir := dir + "/docs/public"
+	if err := os.MkdirAll(publicDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	withCwd(t, dir)
+
+	cmd := newDocsCleanCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(publicDir); !os.IsNotExist(err) {
+		t.Errorf("docs/public should be removed: stat err=%v", err)
+	}
+}
+
+// TestDocsCleanWithoutToolchainErrors — `stratt docs clean` without
+// any detected docs toolchain reports the same error as docs build/serve.
+func TestDocsCleanWithoutToolchainErrors(t *testing.T) {
+	dir := t.TempDir()
+	withCwd(t, dir)
+	cmd := newDocsCleanCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when no docs toolchain detected")
 	}
 }
 

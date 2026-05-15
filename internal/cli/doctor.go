@@ -83,7 +83,9 @@ func newDoctorCmd(b BuildInfo) *cobra.Command {
 					if hint == "" {
 						hint = "(no install hint — check the tool's own docs)"
 					}
-					fmt.Fprintf(mtw, "  %s\t%s\n", t, hint)
+					// `→` matches the separator used in the Resolved
+					// commands table above for visual consistency.
+					fmt.Fprintf(mtw, "  %s\t→ %s\n", t, hint)
 				}
 				mtw.Flush()
 			}

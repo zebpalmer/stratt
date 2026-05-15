@@ -202,9 +202,9 @@ func TestDoctorShowsBackendMappingForMultiStack(t *testing.T) {
 	body := out.String()
 	expected := []string{
 		"uv build",
-		"uv run pytest",
-		"uv run ruff check",
-		"uv run ruff format",
+		"uv run --all-extras --all-groups pytest",
+		"uv run --all-extras --all-groups ruff check --fix",
+		"uv run --all-extras --all-groups ruff format",
 		"mkdocs build",
 		"kustomize image bump",
 	}
