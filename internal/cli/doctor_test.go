@@ -91,8 +91,9 @@ func TestDoctorAliasDr(t *testing.T) {
 // whose binary isn't on $PATH, doctor reports it in a separate
 // "Missing tools" block with an install suggestion.
 func TestDoctorEmitsMissingToolsBlock(t *testing.T) {
-	// Hugo in docs/ → resolver wants `hugo`, which is almost certainly
-	// not on the test runner's PATH.
+	// Force hugo off PATH so the test is deterministic on dev machines
+	// where it might be installed.
+	t.Setenv("PATH", "")
 	dir := t.TempDir()
 	touch(t, dir, "docs/hugo.toml")
 	withCwd(t, dir)
