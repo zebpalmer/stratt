@@ -29,7 +29,7 @@ func newConfigCmd(b BuildInfo) *cobra.Command {
 
 func newConfigMigrateCmd(b BuildInfo) *cobra.Command {
 	var (
-		yes        bool
+		yes         bool
 		skipPinBump bool
 	)
 	cmd := &cobra.Command{

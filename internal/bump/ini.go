@@ -18,15 +18,15 @@ import (
 // The format is INI, with a top-level [bumpversion] section for global
 // settings and one section per file:
 //
-//   [bumpversion]
-//   current_version = 1.0.1
-//   commit = True
-//   tag = True
-//   tag_name = {new_version}
+//	[bumpversion]
+//	current_version = 1.0.1
+//	commit = True
+//	tag = True
+//	tag_name = {new_version}
 //
-//   [bumpversion:file:./wraithd/__init__.py]
-//   search = __version__ = "{current_version}"
-//   replace = __version__ = "{new_version}"
+//	[bumpversion:file:./wraithd/__init__.py]
+//	search = __version__ = "{current_version}"
+//	replace = __version__ = "{new_version}"
 //
 // Section bodies without an explicit search/replace inherit the
 // defaults — same semantics as the TOML variant.

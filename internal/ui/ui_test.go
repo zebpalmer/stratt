@@ -75,9 +75,9 @@ func TestStyleMarkers(t *testing.T) {
 	var buf bytes.Buffer
 	s := NewStyle(&buf, &buf, ColorNever, Normal)
 	for _, tc := range []struct {
-		name    string
-		fn      func(string) string
-		marker  string
+		name   string
+		fn     func(string) string
+		marker string
 	}{
 		{"success", s.Success, "✓"},
 		{"failure", s.Failure, "✗"},

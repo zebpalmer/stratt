@@ -20,10 +20,10 @@ import (
 // newDeployCmd implements `stratt deploy <env> <version>` (R2.5).
 //
 // Default behavior:
-//   1. Verify the working tree is clean (otherwise abort — we don't want
-//      to mix unrelated changes into the deploy commit).
-//   2. Edit deploy/overlays/<env>/kustomization.yaml in place.
-//   3. Stage, commit, and push.
+//  1. Verify the working tree is clean (otherwise abort — we don't want
+//     to mix unrelated changes into the deploy commit).
+//  2. Edit deploy/overlays/<env>/kustomization.yaml in place.
+//  3. Stage, commit, and push.
 //
 // Opt-out flags exist for the partial paths (--no-commit, --no-push).
 //
@@ -212,7 +212,8 @@ func resolveDeployCommitPush(cmd *cobra.Command, noCommitFlag, noPushFlag bool, 
 // image-tag deploy.
 //
 // Subject:
-//   stratt deploy: <image> version <new> to <env>
+//
+//	stratt deploy: <image> version <new> to <env>
 //
 // The `stratt deploy:` prefix makes commits made by stratt grep-friendly
 // (`git log --grep='^stratt deploy:'`).  The body records the file

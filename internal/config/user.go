@@ -138,11 +138,11 @@ func LoadUser() (*User, error) {
 // unknown-field parsing rejects anything that doesn't fit, so a
 // misplaced [tasks] in the user file fails with "unknown field tasks".
 type rawUser struct {
-	Update  *rawUserUpdate            `toml:"update"`
-	Display *rawUserDisplay           `toml:"display"`
-	Paths   map[string]string         `toml:"paths"`
-	Release *rawUserReleaseDefaults   `toml:"release"`
-	Deploy  *rawUserDeployDefaults    `toml:"deploy"`
+	Update  *rawUserUpdate          `toml:"update"`
+	Display *rawUserDisplay         `toml:"display"`
+	Paths   map[string]string       `toml:"paths"`
+	Release *rawUserReleaseDefaults `toml:"release"`
+	Deploy  *rawUserDeployDefaults  `toml:"deploy"`
 }
 
 type rawUserUpdate struct {

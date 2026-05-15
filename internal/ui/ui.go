@@ -62,20 +62,20 @@ func ParseColorMode(s string) ColorMode {
 // to specific writers.  Pass this around rather than recomputing color
 // every print.
 type Style struct {
-	Out       io.Writer
-	Err       io.Writer
-	Level     Level
-	useColor  bool
+	Out      io.Writer
+	Err      io.Writer
+	Level    Level
+	useColor bool
 }
 
 // NewStyle returns a Style for the given writers and policy.
 //
 // Color enable rules, in order:
-//   1. NO_COLOR env var set (per https://no-color.org)            → no color
-//   2. mode = ColorNever                                          → no color
-//   3. mode = ColorAlways                                         → color
-//   4. mode = ColorAuto AND `out` is a TTY                        → color
-//   5. otherwise                                                  → no color
+//  1. NO_COLOR env var set (per https://no-color.org)            → no color
+//  2. mode = ColorNever                                          → no color
+//  3. mode = ColorAlways                                         → color
+//  4. mode = ColorAuto AND `out` is a TTY                        → color
+//  5. otherwise                                                  → no color
 func NewStyle(out, errW io.Writer, mode ColorMode, level Level) *Style {
 	useColor := false
 	switch {
