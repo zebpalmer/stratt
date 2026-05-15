@@ -1,0 +1,66 @@
+# Build and deploy the docs site (https://stratt.sh) to GitHub Pages.
+#
+# Source:  docs/  (Hugo project, hextra theme as a git submodule)
+# Trigger: pushes to main that touch docs/ or this workflow file
+#
+# First-time enable on GitHub:
+#   1. Settings -> Pages -> Source: "GitHub Actions"
+#   2. DNS for stratt.sh:
+#        A records to GitHub Pages IPs (185.199.108-111.153)
+#   3. Once deployed, flip on "Enforce HTTPS"
+#
+# Security note: this workflow does not consume any user-controlled
+# inputs (PR/issue text, head refs) in run: blocks.
+
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with theme submodule)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.150.0'
+          extended: true
+
+      - name: Build site
+        working-directory: docs
+        run: hugo --minify
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,70 @@
+# Hugo configuration for the stratt docs site (https://stratt.sh).
+#
+# Theme: hextra — installed as a git submodule at themes/hextra.
+# To set up locally:
+#   git submodule add https://github.com/imfing/hextra.git docs/themes/hextra
+
+baseURL = "https://stratt.sh/"
+title = "stratt"
+theme = "hextra"
+
+languageCode = "en-us"
+defaultContentLanguage = "en"
+enableRobotsTXT = true
+enableGitInfo = false
+
+[markup.goldmark.renderer]
+unsafe = true  # allow inline HTML where useful
+
+[markup.highlight]
+noClasses = false
+
+[markup.tableOfContents]
+endLevel = 3
+ordered = false
+startLevel = 2
+
+# ---------------------------------------------------------------------------
+# Hextra theme params
+# ---------------------------------------------------------------------------
+
+[params]
+description = "A polyglot task runner that replaces Makefiles, manages release versions, and handles Kustomize image bumps."
+
+[params.navbar]
+displayTitle = true
+displayLogo = false
+
+[params.theme]
+# system follows OS preference; offer the toggle anyway.
+default = "system"
+displayToggle = true
+
+[params.footer]
+displayCopyright = false
+displayPoweredBy = false
+
+[params.editURL]
+enable = true
+base = "https://github.com/zebpalmer/stratt/edit/main/docs/content"
+
+# Hide hextra's default "search" placeholder — we have nothing to search
+# yet and the empty UI feels worse than no UI.
+[params.search]
+enable = false
+
+# ---------------------------------------------------------------------------
+# Top-nav menu
+# ---------------------------------------------------------------------------
+
+[[menu.main]]
+identifier = "docs"
+name = "Docs"
+pageRef = "/docs"
+weight = 1
+
+[[menu.main]]
+identifier = "github"
+name = "GitHub"
+url = "https://github.com/zebpalmer/stratt"
+weight = 2
