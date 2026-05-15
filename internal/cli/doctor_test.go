@@ -66,6 +66,27 @@ func TestDoctorEmptyRepo(t *testing.T) {
 	}
 }
 
+// TestDoctorAliasDr — `stratt dr` invokes the doctor command.
+func TestDoctorAliasDr(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "go.mod")
+	withCwd(t, dir)
+
+	// Build the root command tree so Cobra resolves aliases the same
+	// way the real binary does.
+	root := newRootCmd(BuildInfo{Version: "x", Commit: "x", Date: "x"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"dr"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("`stratt dr` failed: %v", err)
+	}
+	if !strings.Contains(out.String(), "stratt doctor") {
+		t.Errorf("expected doctor output from `dr` alias; got:\n%s", out.String())
+	}
+}
+
 // TestDoctorEmitsMissingToolsBlock — when the resolver picks a backend
 // whose binary isn't on $PATH, doctor reports it in a separate
 // "Missing tools" block with an install suggestion.

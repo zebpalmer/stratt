@@ -11,8 +11,9 @@ import (
 
 func newDoctorCmd(b BuildInfo) *cobra.Command {
 	return &cobra.Command{
-		Use:   "doctor",
-		Short: "Report detected stacks, resolved command backends, and binary metadata",
+		Use:     "doctor",
+		Aliases: []string{"dr"},
+		Short:   "Report detected stacks, resolved command backends, and binary metadata",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()
 
