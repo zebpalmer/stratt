@@ -97,6 +97,73 @@ func TestDetectSphinx(t *testing.T) {
 	}
 }
 
+// TestDetectHugoAtRoot — Hugo config at the repo root (typical for a
+// dedicated docs/site repo).
+func TestDetectHugoAtRoot(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "hugo.toml")
+	got := detectHugo(dir)
+	if got.Name != "hugo" {
+		t.Errorf("got %+v", got)
+	}
+	if got.Signal != "hugo.toml" {
+		t.Errorf("signal: got %q", got.Signal)
+	}
+	if src := FindHugoSource(dir); src != "." {
+		t.Errorf("FindHugoSource: got %q, want \".\"", src)
+	}
+}
+
+// TestDetectHugoInDocsSubdir — Hugo config in docs/ (stratt's own
+// layout — code lives at the root, docs site nested).
+func TestDetectHugoInDocsSubdir(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "docs/hugo.toml")
+	got := detectHugo(dir)
+	if got.Name != "hugo" {
+		t.Errorf("got %+v", got)
+	}
+	if got.Signal != "docs/hugo.toml" {
+		t.Errorf("signal: got %q", got.Signal)
+	}
+	if src := FindHugoSource(dir); src != "docs" {
+		t.Errorf("FindHugoSource: got %q, want \"docs\"", src)
+	}
+}
+
+// TestDetectHugoMultipleFormats — Hugo accepts toml/yaml/yml/json
+// config files; we detect any of them.
+func TestDetectHugoMultipleFormats(t *testing.T) {
+	for _, name := range []string{"hugo.yaml", "hugo.yml", "hugo.json"} {
+		dir := t.TempDir()
+		touch(t, dir, name)
+		if got := detectHugo(dir); got.Name != "hugo" {
+			t.Errorf("%s: not detected", name)
+		}
+	}
+}
+
+// TestDetectHugoRootBeatsDocs — if both a root- and docs-level config
+// exist, the root one wins (matches Hugo's own discovery order).
+func TestDetectHugoRootBeatsDocs(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "hugo.toml")
+	touch(t, dir, "docs/hugo.toml")
+	if src := FindHugoSource(dir); src != "." {
+		t.Errorf("FindHugoSource: got %q, want root", src)
+	}
+}
+
+// TestDetectHugoAbsent — no Hugo config means no match.
+func TestDetectHugoAbsent(t *testing.T) {
+	if got := detectHugo(t.TempDir()); got.Name != "" {
+		t.Errorf("empty repo: got %+v", got)
+	}
+	if src := FindHugoSource(t.TempDir()); src != "" {
+		t.Errorf("empty repo: src = %q, want empty", src)
+	}
+}
+
 // TestScanMultiStack mirrors the cartographer-daemon shape:
 // python+uv + docker + kustomize + mkdocs.  Names should come back
 // sorted alphabetically per Scan's contract.

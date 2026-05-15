@@ -69,7 +69,32 @@ func docsCommand(root, action string) (string, []string, error) {
 			case "serve":
 				return "sphinx-autobuild", []string{"docs", "_build/html"}, nil
 			}
+		case "hugo":
+			return hugoCommand(root, action)
 		}
 	}
-	return "", nil, errors.New("no docs toolchain detected (looked for mkdocs.yml or docs/conf.py)")
+	return "", nil, errors.New("no docs toolchain detected (looked for mkdocs.yml, docs/conf.py, or hugo.{toml,yaml,yml,json})")
+}
+
+// hugoCommand builds the right Hugo invocation given where the site's
+// config lives.  When hugo.toml is in a subdirectory (e.g. `docs/`),
+// passes --source so Hugo uses that as its project root; otherwise runs
+// from cwd.
+func hugoCommand(root, action string) (string, []string, error) {
+	src := detect.FindHugoSource(root)
+	var argv []string
+	if src != "" && src != "." {
+		argv = append(argv, "--source", src)
+	}
+	switch action {
+	case "build":
+		argv = append(argv, "--minify")
+		return "hugo", argv, nil
+	case "serve":
+		// `hugo server` is the canonical incantation; `hugo serve` is
+		// an alias in newer versions but `server` works everywhere.
+		argv = append([]string{"server"}, argv...)
+		return "hugo", argv, nil
+	}
+	return "", nil, errors.New("unknown hugo action: " + action)
 }

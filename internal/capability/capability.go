@@ -56,6 +56,18 @@ type Resolution struct {
 	Engine  Engine // nil if no chain entry matched
 }
 
+// Tooler is an optional interface for engines whose readiness depends on
+// an external binary being on `$PATH`.  Implementations return the
+// binary name (e.g. "hugo", "uv") so callers — typically `stratt
+// doctor` — can offer install suggestions when the tool is missing.
+//
+// Engines that aren't tool-backed (composites, delegates, not-yet-
+// implemented placeholders) should not implement this interface, or
+// should return "".
+type Tooler interface {
+	Tool() string
+}
+
 // Resolver walks the resolution chains for a given repo and answers
 // "what engine handles `stratt <command>` here?"
 type Resolver struct {

@@ -34,6 +34,10 @@ func (e *execEngine) Status() EngineStatus {
 	return StatusReady
 }
 
+// Tool implements capability.Tooler — used by `stratt doctor` to
+// surface install hints for missing binaries.
+func (e *execEngine) Tool() string { return e.tool }
+
 func (e *execEngine) Run(ctx context.Context, _ []string) error {
 	cmd := exec.CommandContext(ctx, e.tool, e.argv...)
 	cmd.Stdin = os.Stdin

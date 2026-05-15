@@ -39,6 +39,7 @@ var detectors = []detector{
 	detectKustomize,
 	detectMkDocs,
 	detectSphinx,
+	detectHugo,
 }
 
 // Scan runs all detectors against root and returns the report.
@@ -112,6 +113,45 @@ func detectSphinx(root string) Stack {
 		return Stack{Name: "sphinx", Signal: "docs/conf.py"}
 	}
 	return Stack{}
+}
+
+// detectHugo checks for a Hugo site config file either at the repo
+// root (typical for dedicated docs repos) or inside a `docs/`
+// subdirectory (typical for projects that ship code AND docs in the
+// same repo — stratt's own layout).  Detection succeeds for any of
+// hugo.{toml,yaml,yml,json}; FindHugoSource returns which directory
+// to point Hugo at.
+func detectHugo(root string) Stack {
+	if src, name := findHugoConfigIn(root); src != "" {
+		signal := name
+		if src != "." {
+			signal = filepath.Join(src, name)
+		}
+		return Stack{Name: "hugo", Signal: signal}
+	}
+	return Stack{}
+}
+
+// FindHugoSource returns the Hugo project directory (relative to root)
+// or "" if no Hugo config is present.  Used by the docs subcommand to
+// invoke `hugo --source <dir>`.
+func FindHugoSource(root string) string {
+	src, _ := findHugoConfigIn(root)
+	return src
+}
+
+// findHugoConfigIn returns (directory, basename) of the first Hugo
+// config file found, searching the repo root then docs/.  Empty
+// directory string means "not found".
+func findHugoConfigIn(root string) (dir, name string) {
+	for _, sub := range []string{".", "docs"} {
+		for _, n := range []string{"hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json"} {
+			if exists(filepath.Join(root, sub, n)) {
+				return sub, n
+			}
+		}
+	}
+	return "", ""
 }
 
 func exists(path string) bool {

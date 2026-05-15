@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/zebpalmer/stratt/internal/detect"
 )
 
 // resolveBuild — see requirements.md §3 "build" chain.
@@ -194,6 +196,13 @@ func (r *Resolver) resolveDocs() Engine {
 		return &execEngine{tool: "mkdocs", argv: []string{"build"}}
 	case r.HasStack("sphinx"):
 		return &execEngine{tool: "sphinx-build", argv: []string{"docs", "_build/html"}}
+	case r.HasStack("hugo"):
+		src := detect.FindHugoSource(r.root)
+		argv := []string{"--minify"}
+		if src != "" && src != "." {
+			argv = append([]string{"--source", src}, argv...)
+		}
+		return &execEngine{tool: "hugo", argv: argv}
 	}
 	return nil
 }

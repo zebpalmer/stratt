@@ -41,6 +41,14 @@ func newDoctorCmd(b BuildInfo) *cobra.Command {
 
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Resolved commands:")
+
+			// Track which tools are missing so we can surface install
+			// hints below the table — keeps the table tight while still
+			// giving the user actionable next steps.  Order-preserving
+			// dedup via a slice + a seen-set.
+			var missingTools []string
+			seen := map[string]bool{}
+
 			tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 			for _, res := range resolver.ResolveAll() {
 				if res.Engine == nil {
@@ -51,12 +59,33 @@ func newDoctorCmd(b BuildInfo) *cobra.Command {
 				switch res.Engine.Status() {
 				case capability.StatusMissingTool:
 					marker = "[tool not on PATH]"
+					if t, ok := res.Engine.(capability.Tooler); ok {
+						name := t.Tool()
+						if name != "" && !seen[name] {
+							seen[name] = true
+							missingTools = append(missingTools, name)
+						}
+					}
 				case capability.StatusPending:
 					marker = "[not yet implemented]"
 				}
 				fmt.Fprintf(tw, "  %s\t→ %s\t%s\n", res.Command, res.Engine.Name(), marker)
 			}
 			tw.Flush()
+
+			if len(missingTools) > 0 {
+				fmt.Fprintln(out)
+				fmt.Fprintln(out, "Missing tools:")
+				mtw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+				for _, t := range missingTools {
+					hint := InstallHint(t)
+					if hint == "" {
+						hint = "(no install hint — check the tool's own docs)"
+					}
+					fmt.Fprintf(mtw, "  %s\t%s\n", t, hint)
+				}
+				mtw.Flush()
+			}
 
 			return nil
 		},
