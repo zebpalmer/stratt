@@ -37,3 +37,14 @@ go.work.sum
 # Build output
 /bin/
 /dist/
+
+# Hugo docs site build artifacts
+# Output dirs (Hugo defaults; --source docs puts them under docs/)
+/docs/public/
+/docs/resources/_gen/
+/docs/.hugo_build.lock
+# Belt-and-suspenders: same names at repo root in case anyone ever
+# moves Hugo there.
+/public/
+/resources/_gen/
+/.hugo_build.lock

@@ -39,13 +39,13 @@ Two Go projects in your fleet can have completely different release flows (one b
 
 ## Install
 
-{{< tabs items="Homebrew,Direct download" >}}
-{{< tab >}}
+{{< tabs >}}
+{{< tab name="Homebrew" >}}
 ```sh
 brew install zebpalmer/tap/stratt
 ```
 {{< /tab >}}
-{{< tab >}}
+{{< tab name="Direct download" >}}
 Grab a binary for your platform from the [releases page](https://github.com/zebpalmer/stratt/releases),
 extract it, and put `stratt` somewhere on your `$PATH`.
 
