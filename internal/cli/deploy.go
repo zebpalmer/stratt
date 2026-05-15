@@ -17,18 +17,9 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// newDeployCmd implements `stratt deploy <env> <version>` (R2.5).
-//
-// Default behavior:
-//  1. Verify the working tree is clean (otherwise abort — we don't want
-//     to mix unrelated changes into the deploy commit).
-//  2. Edit deploy/overlays/<env>/kustomization.yaml in place.
-//  3. Stage, commit, and push.
-//
-// Opt-out flags exist for the partial paths (--no-commit, --no-push).
-//
-// Sub-subcommand `stratt deploy envs` lists overlays and their current
-// image tags without modifying anything.
+// newDeployCmd implements `stratt deploy <env> <version>`.  Default
+// flow: check clean tree → edit kustomization.yaml → commit → push.
+// `--no-commit` and `--no-push` cover the partial paths.
 func newDeployCmd() *cobra.Command {
 	var (
 		imageName  string
@@ -62,12 +53,8 @@ Examples:
 				return fmt.Errorf("no overlay at %s (run `stratt deploy envs` to list available environments)", overlay)
 			}
 
-			// Layered config resolution.
 			proj, _ := config.Load(cwd)
 			usr, _ := config.LoadUser()
-
-			// Resolve commit/push/image-name with the standard
-			// precedence (CLI > project > user > default).
 			doCommit, doPush := resolveDeployCommitPush(cmd, noCommit, noPush, proj, usr)
 
 			effectiveImage := imageName
@@ -78,9 +65,8 @@ Examples:
 			ctx := cmd.Context()
 			repo := git.New(cwd)
 
-			// Pre-flight: working tree must be clean so the deploy
-			// commit doesn't accidentally roll in unrelated edits.
-			// Skipped when the user has opted into edit-only mode.
+			// Clean-tree check protects the deploy commit from picking
+			// up unrelated edits.  Skipped when committing is disabled.
 			if doCommit {
 				clean, err := repo.IsClean(ctx)
 				if err != nil {
@@ -91,7 +77,6 @@ Examples:
 				}
 			}
 
-			// Apply the image bump.
 			change, err := kustomize.SetImage(overlay, effectiveImage, version)
 			if err != nil {
 				return err
@@ -111,7 +96,6 @@ Examples:
 				return nil
 			}
 
-			// Optional confirmation before doing git activity.
 			if !yes {
 				if !confirmCommit(cmd.OutOrStdout(), cmd.InOrStdin()) {
 					fmt.Fprintln(cmd.OutOrStdout(),
@@ -120,7 +104,6 @@ Examples:
 				}
 			}
 
-			// Stage + commit.
 			if err := repo.Add(ctx, overlay); err != nil {
 				return err
 			}

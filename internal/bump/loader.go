@@ -10,21 +10,17 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// Load returns the bump Config for root, reading from the first matching
-// location in the R2.4.7 compat chain:
+// Load returns the bump Config for root, walking the supported config
+// locations in priority order:
 //
 //  1. [bump] in stratt.toml
 //  2. [tool.stratt.bump] in pyproject.toml
 //  3. [tool.bumpversion] in pyproject.toml
 //  4. .bumpversion.toml
-//  5. .bumpversion.cfg  (deprecation note emitted via the returned warning)
+//  5. .bumpversion.cfg  (INI; emits a deprecation warning)
 //
-// Returns (nil, nil) when no bump config is present anywhere — the
-// resolver then uses tag-only mode.
-//
-// Returns a non-nil warning string when the config came from a
-// deprecated location; callers should surface it via the deprecation
-// registry path once that lands.
+// Returns (nil, "", nil) for repos with no bump config — the resolver
+// then falls through to tag-only release mode.
 func Load(root string) (*Config, string, error) {
 	// 1 & 2: native locations
 	if cfg, src, err := loadNative(root); err != nil {
@@ -53,8 +49,7 @@ func Load(root string) (*Config, string, error) {
 		return cfg, "", nil
 	}
 
-	// 5: .bumpversion.cfg — INI format.  Parsed natively (eight LCG
-	// repos still use this format) but flagged as deprecated.
+	// 5: .bumpversion.cfg (legacy INI).
 	iniPath := filepath.Join(root, ".bumpversion.cfg")
 	if exists(iniPath) {
 		if cfg, err := loadBumpversionINI(iniPath); err != nil {
@@ -68,22 +63,15 @@ func Load(root string) (*Config, string, error) {
 	return nil, "", nil
 }
 
-// ensureSourceInFiles guarantees that the bump source file (where
-// current_version was read from) is also in cfg.Files, so the bump
-// engine updates it on every release.
+// ensureSourceInFiles auto-adds the bump source file to cfg.Files when
+// the user hasn't listed it explicitly, so its `current_version` field
+// stays in sync after every bump.  Without this, the in-file version
+// freezes at the original value and the next release computes its
+// starting point from a stale number.
 //
-// Without this, repos that only have `current_version` in their config
-// file (e.g., [bump] in stratt.toml or [tool.bumpversion] in
-// pyproject.toml) would have their `current_version` field stay frozen
-// at the bumped-FROM value — subsequent releases would compute the
-// wrong starting point and silently produce duplicate tags.
-//
-// bump-my-version does this transparently by design.  Our native engine
-// matches that behavior here so existing configs work the same way.
-//
-// The search/replace patterns are format-aware: TOML config has quoted
-// version strings (`current_version = "1.2.3"`), INI config does not
-// (`current_version = 1.2.3`).
+// bump-my-version does this transparently; we match that behavior.
+// Patterns are format-aware — TOML quotes its version string, INI
+// doesn't.
 func ensureSourceInFiles(cfg *Config, root string) {
 	if cfg == nil || cfg.Source == "" {
 		return
@@ -94,7 +82,7 @@ func ensureSourceInFiles(cfg *Config, root string) {
 	}
 	for _, f := range cfg.Files {
 		if filepath.Clean(f.Filename) == filepath.Clean(rel) {
-			return // already covered explicitly by the user
+			return
 		}
 	}
 	search, replace := defaultSearchReplaceForSource(rel)
@@ -106,12 +94,12 @@ func ensureSourceInFiles(cfg *Config, root string) {
 }
 
 // defaultSearchReplaceForSource picks the format-correct search/replace
-// templates for the current_version line in the named source file.
+// templates for the current_version line.  INI omits the quotes that
+// TOML wraps strings in.
 func defaultSearchReplaceForSource(filename string) (search, replace string) {
 	if strings.HasSuffix(filename, ".cfg") || strings.HasSuffix(filename, ".ini") {
 		return `current_version = {current_version}`, `current_version = {new_version}`
 	}
-	// TOML format (pyproject.toml, stratt.toml, .bumpversion.toml, etc.)
 	return `current_version = "{current_version}"`, `current_version = "{new_version}"`
 }
 
@@ -178,14 +166,11 @@ func loadBumpversionTOML(path string) (*Config, error) {
 	return rb.toConfig(), nil
 }
 
-// rawBumpVersion captures the union of bump-my-version's [tool.bumpversion]
-// schema and stratt's native [bump] schema.  Unknown fields are
-// permitted (loader is intentionally non-strict here) so existing
-// bump-my-version configs with fields we don't honor still parse.
-//
-// Fields we *don't* support in v1 (parse, serialize, regex,
-// pre_commit_hooks, sign_tags, allow_dirty, ignore_missing_version)
-// are accepted but not acted on.  See R2.4.10.
+// rawBumpVersion is the union of bump-my-version's [tool.bumpversion]
+// schema and stratt's native [bump] schema.  Parsing is permissive so
+// bump-my-version configs with fields we don't honor (parse,
+// serialize, regex, pre_commit_hooks, sign_tags, allow_dirty, etc.)
+// still load — those fields are read but ignored.
 type rawBumpVersion struct {
 	CurrentVersion string         `toml:"current_version"`
 	Search         string         `toml:"search"`
@@ -196,8 +181,7 @@ type rawBumpVersion struct {
 	Commit         *bool          `toml:"commit"`
 	Message        string         `toml:"message"`
 
-	// Accepted but not honored in v1 — silently parsed so existing
-	// configs work without error.
+	// Parsed but not honored; see rawBumpVersion doc.
 	Parse                string   `toml:"parse"`
 	Serialize            []string `toml:"serialize"`
 	Regex                *bool    `toml:"regex"`
@@ -235,8 +219,7 @@ func (rb *rawBumpVersion) toConfig() *Config {
 	return c
 }
 
-// decodePermissive reads path as TOML into target.  Unknown fields are
-// allowed — see rawBumpVersion docstring.
+// decodePermissive reads path as TOML into target without strict-mode.
 func decodePermissive(path string, target any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -245,9 +228,8 @@ func decodePermissive(path string, target any) error {
 	return toml.Unmarshal(data, target)
 }
 
-// dig walks a nested map[string]any tree by successive keys.  Returns
-// nil if any segment is missing or not a map at the right depth.  Used
-// to extract sub-tables from a permissively-parsed pyproject.toml.
+// dig walks a nested map[string]any by successive keys.  Returns nil
+// if any segment is missing or isn't a map at the right depth.
 func dig(root map[string]any, keys ...string) any {
 	cur := any(root)
 	for _, k := range keys {
@@ -264,9 +246,9 @@ func dig(root map[string]any, keys ...string) any {
 	return cur
 }
 
-// remarshal serializes v to TOML, then decodes into target.  This is
-// our crutch for "I have a map[string]any subtree, give me a typed
-// struct" — go-toml/v2 doesn't expose a generic Decode-from-map API.
+// remarshal serializes v to TOML then decodes into target — used to
+// type a map[string]any subtree without writing manual coercions.
+// go-toml/v2 has no Decode-from-map API.
 func remarshal(v any, target any) error {
 	buf := &bytes.Buffer{}
 	if err := toml.NewEncoder(buf).Encode(v); err != nil {

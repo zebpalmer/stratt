@@ -1,13 +1,6 @@
-# GoReleaser config for stratt.
-#
-# https://goreleaser.com/
-#
-# Triggered by .github/workflows/release.yml on tag push.
-#
-# Builds darwin/linux × arm64/amd64 (R1.6), produces release archives + a
-# Homebrew formula in zebpalmer/homebrew-tap.  Artifact attestations are
-# produced by the workflow itself (actions/attest-build-provenance), not by
-# GoReleaser, so they're not configured here.
+# Driven by .github/workflows/release.yml.  Sigstore attestations are
+# produced by the workflow's actions/attest-build-provenance step,
+# not here.
 version: 2
 
 project_name: stratt

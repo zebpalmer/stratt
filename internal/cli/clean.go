@@ -10,9 +10,8 @@ import (
 	"github.com/zebpalmer/stratt/internal/detect"
 )
 
-// newCleanCmd implements `stratt clean` — multi-stack cleanup.  Walks
-// detected stacks and removes the conventional artifact directories
-// for each.  Per requirements.md §3 "clean" chain.
+// newCleanCmd implements `stratt clean`: walks the detected stacks
+// and removes their conventional artifact directories.
 func newCleanCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clean",
@@ -102,9 +101,9 @@ After cleaning a python+uv repo, run ` + "`stratt setup`" + ` to rebuild .venv.`
 	}
 }
 
-// runUVCacheClean shells out to `uv cache clean` to drop the global
-// download cache for python+uv repos.  Best effort — if uv isn't on
-// PATH, log it and move on rather than failing clean.
+// runUVCacheClean drops the global uv download cache.  Best effort:
+// missing uv or a non-zero exit logs and continues — clean shouldn't
+// fail because of cache cleanup.
 func runUVCacheClean(cmd *cobra.Command, out interface{ Write([]byte) (int, error) }) {
 	if _, err := exec.LookPath("uv"); err != nil {
 		fmt.Fprintln(out, "skipped uv cache clean (uv not on PATH)")
@@ -120,16 +119,12 @@ func runUVCacheClean(cmd *cobra.Command, out interface{ Write([]byte) (int, erro
 	fmt.Fprintln(out, "cleaned uv cache")
 }
 
-// removeEggInfo walks cwd and removes any *.egg-info directories.
-// Mirrors what Make's `rm -rf *.egg-info` does but recurses, catching
-// nested packages.
+// removeEggInfo walks cwd and removes *.egg-info directories.
 func removeEggInfo(root string, log interface{ Write([]byte) (int, error) }) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
-		// Don't descend into VCS/venv directories — keeps the walk fast
-		// and avoids touching anything inside .git or .venv.
 		if info.IsDir() {
 			switch info.Name() {
 			case ".git", ".venv", "node_modules":
@@ -146,13 +141,11 @@ func removeEggInfo(root string, log interface{ Write([]byte) (int, error) }) err
 	})
 }
 
-// removePycache walks cwd and removes every __pycache__ directory it
-// finds.  Errors on any individual directory are surfaced; partial
-// success is acceptable (the next run picks up the rest).
+// removePycache walks cwd and removes every __pycache__ directory.
 func removePycache(root string, log interface{ Write([]byte) (int, error) }) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // skip unreadable entries; not fatal
+			return nil
 		}
 		if info.IsDir() && info.Name() == "__pycache__" {
 			if rmErr := os.RemoveAll(path); rmErr == nil {

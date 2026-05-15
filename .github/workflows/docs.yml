@@ -1,16 +1,8 @@
-# Build and deploy the docs site (https://stratt.sh) to GitHub Pages.
-#
-# Source:  docs/  (Hugo project, hextra theme as a git submodule)
-# Trigger: pushes to main that touch docs/ or this workflow file
-#
-# First-time enable on GitHub:
-#   1. Settings -> Pages -> Source: "GitHub Actions"
-#   2. DNS for stratt.sh:
-#        A records to GitHub Pages IPs (185.199.108-111.153)
-#   3. Once deployed, flip on "Enforce HTTPS"
-#
-# Security note: this workflow does not consume any user-controlled
-# inputs (PR/issue text, head refs) in run: blocks.
+# Builds docs/ (Hugo + hextra) and deploys to GitHub Pages
+# (https://stratt.sh).  First-time enable:
+#   1. Settings → Pages → Source: "GitHub Actions"
+#   2. DNS for stratt.sh → A records to 185.199.108-111.153
+#   3. After first successful deploy, enable "Enforce HTTPS".
 
 name: docs
 
@@ -31,9 +23,7 @@ concurrency:
   group: docs
   cancel-in-progress: true
 
-# Force any JavaScript actions (including transitive ones used by
-# composite actions we depend on) onto Node 24 ahead of the June 2026
-# deadline.  Safe to leave in place once Node 24 is the default.
+# Opt in to Node 24 for JS actions ahead of the June 2026 default switch.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
