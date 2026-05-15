@@ -60,8 +60,18 @@ func newDoctorCmd(b BuildInfo) *cobra.Command {
 				switch res.Engine.Status() {
 				case capability.StatusMissingTool:
 					marker = "[tool not on PATH]"
-					if t, ok := res.Engine.(capability.Tooler); ok {
-						name := t.Tool()
+					// MultiTooler wins when present so fan-out engines
+					// (e.g. lint = ruff + actionlint) surface every
+					// underlying tool, not just the first.
+					var names []string
+					if mt, ok := res.Engine.(capability.MultiTooler); ok {
+						names = mt.Tools()
+					} else if t, ok := res.Engine.(capability.Tooler); ok {
+						if n := t.Tool(); n != "" {
+							names = []string{n}
+						}
+					}
+					for _, name := range names {
 						if name != "" && !seen[name] {
 							seen[name] = true
 							missingTools = append(missingTools, name)

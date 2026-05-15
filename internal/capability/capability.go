@@ -68,6 +68,14 @@ type Tooler interface {
 	Tool() string
 }
 
+// MultiTooler is an optional interface for engines that wrap several
+// tools at once (multiEngine).  Doctor prefers Tools() over Tool()
+// when present so every missing dependency in a fan-out engine
+// surfaces in the install-hint list.
+type MultiTooler interface {
+	Tools() []string
+}
+
 // Resolver walks the resolution chains for a given repo and answers
 // "what engine handles `stratt <command>` here?"
 type Resolver struct {

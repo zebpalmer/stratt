@@ -54,6 +54,10 @@ func InstallHint(tool string) string {
 	// Git / system
 	case "git":
 		return "preinstalled on most systems; otherwise `brew install git`"
+
+	// GitHub Actions
+	case "actionlint":
+		return "brew install actionlint"
 	}
 	return ""
 }

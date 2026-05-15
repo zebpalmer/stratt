@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // Stack is one detected project stack.
@@ -40,6 +41,7 @@ var detectors = []detector{
 	detectMkDocs,
 	detectSphinx,
 	detectHugo,
+	detectGitHubActions,
 }
 
 // Scan runs all detectors against root and returns the report.
@@ -152,6 +154,38 @@ func findHugoConfigIn(root string) (dir, name string) {
 		}
 	}
 	return "", ""
+}
+
+// detectGitHubActions matches a GitHub Actions repo in either shape:
+//
+//   - composite / reusable action: `action.yml` or `action.yaml` at the
+//     repo root (e.g., setup-stratt)
+//   - workflows-only repo: at least one .yml/.yaml file in
+//     .github/workflows/ (e.g., a .github org repo)
+//
+// The stack name is the same in both cases — the chain only cares that
+// stratt is looking at actions YAML.
+func detectGitHubActions(root string) Stack {
+	for _, n := range []string{"action.yml", "action.yaml"} {
+		if exists(filepath.Join(root, n)) {
+			return Stack{Name: "github-actions", Signal: n}
+		}
+	}
+	dir := filepath.Join(root, ".github", "workflows")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return Stack{}
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml") {
+			return Stack{Name: "github-actions", Signal: ".github/workflows/*.yml"}
+		}
+	}
+	return Stack{}
 }
 
 func exists(path string) bool {

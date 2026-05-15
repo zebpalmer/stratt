@@ -75,7 +75,36 @@ func (r *Resolver) ResolveLintCheck() Engine {
 
 // lintEngine factors the chain so both modes share the same matching
 // logic.  Passing fix=false yields the check-only invocation.
+//
+// Language lint is first-match-wins, but `actionlint` is *always*
+// appended when workflows exist — actions YAML wants linting in every
+// repo that has it, regardless of primary language.  The result is a
+// multiEngine when both apply, a single engine otherwise.
 func (r *Resolver) lintEngine(fix bool) Engine {
+	primary := r.languageLintEngine(fix)
+	var secondary Engine
+	if r.hasGitHubWorkflows() {
+		// actionlint validates workflow files under .github/workflows/.
+		// It does NOT understand composite `action.yml`; we already
+		// gate detection on workflows so this is safe.  No fix mode.
+		secondary = &execEngine{tool: "actionlint", argv: []string{}, display: "actionlint"}
+	}
+	switch {
+	case primary != nil && secondary != nil:
+		return &multiEngine{engines: []Engine{primary, secondary}}
+	case primary != nil:
+		return primary
+	case secondary != nil:
+		return secondary
+	}
+	return nil
+}
+
+// languageLintEngine returns the per-language lint engine — the
+// historical first-match-wins chain.  Split out so lintEngine can
+// compose it with non-language linters (actionlint) without
+// duplicating the switch.
+func (r *Resolver) languageLintEngine(fix bool) Engine {
 	switch {
 	case r.HasStack("python+uv"):
 		argv := append([]string{"run"}, uvAllFlags...)
@@ -306,6 +335,26 @@ func (r *Resolver) resolveAll() Engine {
 func (r *Resolver) fileExists(names ...string) bool {
 	for _, n := range names {
 		if _, err := os.Stat(filepath.Join(r.root, n)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// hasGitHubWorkflows reports whether .github/workflows/ contains at
+// least one .yml/.yaml file.  Distinguishes a "workflows" actions repo
+// from a composite-action-only repo (action.yml at root).
+func (r *Resolver) hasGitHubWorkflows() bool {
+	entries, err := os.ReadDir(filepath.Join(r.root, ".github", "workflows"))
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml") {
 			return true
 		}
 	}

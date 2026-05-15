@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-var _ = strings.TrimSpace // keep strings import in case future engines need it
 
 // execEngine is the standard Engine implementation: a single external
 // command run in the repo root.  Most engines are just this with
@@ -146,4 +145,54 @@ func (e *compositeEngine) Run(_ context.Context, _ []string) error {
 type CompositeEngine interface {
 	Engine
 	CompositeMembers() []string
+}
+
+// multiEngine runs a sequence of sub-engines under a single universal
+// command.  Unlike compositeEngine (which routes back through the task
+// registry by command name), multiEngine executes its inner engines
+// directly — used when a single universal command needs to fan out to
+// multiple tools that don't have their own universal-command names
+// (e.g. lint = language-lint + actionlint).
+type multiEngine struct {
+	engines []Engine
+}
+
+func (e *multiEngine) Name() string {
+	parts := make([]string, 0, len(e.engines))
+	for _, sub := range e.engines {
+		parts = append(parts, sub.Name())
+	}
+	return strings.Join(parts, " + ")
+}
+
+func (e *multiEngine) Status() EngineStatus {
+	for _, sub := range e.engines {
+		if s := sub.Status(); s != StatusReady {
+			return s
+		}
+	}
+	return StatusReady
+}
+
+func (e *multiEngine) Run(ctx context.Context, args []string) error {
+	for _, sub := range e.engines {
+		if err := sub.Run(ctx, args); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Tools surfaces every underlying tool name so `stratt doctor` can
+// list each missing dependency.  Implements MultiTooler.
+func (e *multiEngine) Tools() []string {
+	out := make([]string, 0, len(e.engines))
+	for _, sub := range e.engines {
+		if t, ok := sub.(Tooler); ok {
+			if name := t.Tool(); name != "" {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
 }
