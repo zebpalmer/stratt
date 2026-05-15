@@ -193,7 +193,7 @@ trivially fake its own verification — bootstrap trust with an
 independent verifier (e.g. ` + "`gh attestation verify`" + ` against the release
 archive) before running stratt the first time.  The install script at
 https://stratt.sh/install.sh does this automatically when gh is on PATH.`,
-		Args:  cobra.NoArgs,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			err := update.VerifyCurrent(cmd.Context(), update.Options{
 				Repo:           strattUpstreamRepo,
