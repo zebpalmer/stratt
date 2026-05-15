@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-
 // execEngine is the standard Engine implementation: a single external
 // command run in the repo root.  Most engines are just this with
 // different argv.
