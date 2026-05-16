@@ -71,14 +71,56 @@ case "$uname_m" in
     *) echo "unsupported architecture: $uname_m" >&2; exit 1 ;;
 esac
 
-if [ -z "$VERSION" ]; then
-    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+# Resolve a version selector to a concrete tag.  Accepted forms:
+#   (empty)   → latest stable release
+#   vN        → latest release within major N (e.g. v1 → latest v1.x.y)
+#   vN.M      → latest release within minor N.M (e.g. v1.14 → latest v1.14.x)
+#   vN.M.P    → exact pin
+#
+# The major/minor forms let setup-stratt@vN pin to a compatible stratt
+# major automatically without baking the exact tag into the action.
+resolve_version() {
+    selector="$1"
+    case "$selector" in
+        "")
+            curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+                | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
+                | head -n1
+            return
+            ;;
+    esac
+    # If the selector already looks fully qualified (has two dots),
+    # don't query the API — just normalize prefix.
+    case "$selector" in
+        v*.*.*|[0-9]*.*.*)
+            case "$selector" in
+                v*) echo "$selector" ;;
+                *)  echo "v${selector}" ;;
+            esac
+            return
+            ;;
+    esac
+    # Strip leading v for comparison.
+    sel_noprefix="${selector#v}"
+    # List all release tags (up to 100; bump --paginate if we ever
+    # ship more) and pick the highest matching prefix.
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=100" \
         | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
-        | head -n1)
-    if [ -z "$VERSION" ]; then
-        echo "failed to resolve latest release tag" >&2
+        | grep -E "^v?${sel_noprefix}\.[0-9]+(\.[0-9]+)?$" \
+        | sed 's/^v//' \
+        | sort -t. -k1,1n -k2,2n -k3,3n \
+        | tail -n1 \
+        | sed 's/^/v/'
+}
+
+if [ -z "$VERSION" ] || expr "$VERSION" : '^v\{0,1\}[0-9][0-9]*$' >/dev/null \
+        || expr "$VERSION" : '^v\{0,1\}[0-9][0-9]*\.[0-9][0-9]*$' >/dev/null; then
+    resolved=$(resolve_version "$VERSION")
+    if [ -z "$resolved" ]; then
+        echo "no release matches selector ${VERSION:-latest} in ${REPO}" >&2
         exit 1
     fi
+    VERSION="$resolved"
 fi
 case "$VERSION" in
     v*) version_noprefix="${VERSION#v}" ;;

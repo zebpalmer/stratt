@@ -14,9 +14,17 @@ The install script handles macOS and Linux (amd64 + arm64). It downloads the mat
 curl -fsSL https://stratt.sh/install.sh | sh
 ```
 
-Pin a version with `--version`:
+The `--version` flag accepts three forms:
+
+| Selector  | Resolves to                          | Use case                                         |
+|-----------|--------------------------------------|--------------------------------------------------|
+| (omitted) | Latest stable release                | Workstations, fast-iterating projects            |
+| `v1`      | Latest `v1.x.y` (compatible major)   | **CI default** — gets fixes, never a breaking major |
+| `v1.14`   | Latest `v1.14.x` (compatible minor)  | Conservative pin                                 |
+| `v1.14.1` | Exact pin                            | Fully reproducible builds                        |
 
 ```sh
+curl -fsSL https://stratt.sh/install.sh | sh -s -- --version v1
 curl -fsSL https://stratt.sh/install.sh | sh -s -- --version v1.14.1
 ```
 
@@ -40,13 +48,21 @@ jobs:
       - run: stratt all
 ```
 
-Pin the version (recommended for reproducible builds):
+For long-lived CI, pin to a major version so you get bug fixes but not breaking changes:
 
 ```yaml
       - name: Install stratt
         run: |
-          curl -fsSL https://stratt.sh/install.sh | sh -s -- --version v1.14.1
+          curl -fsSL https://stratt.sh/install.sh | sh -s -- --version v1
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+```
+
+This installs the latest `v1.x.y` release at the time the workflow runs. Stratt follows semver: patch and minor releases within a major are backwards-compatible by policy. When you're ready to upgrade past a breaking change, bump the selector to `v2`.
+
+For fully reproducible CI (lockfile-level), use an exact version:
+
+```yaml
+          curl -fsSL https://stratt.sh/install.sh | sh -s -- --version v1.14.1
 ```
 
 ### Required permissions
