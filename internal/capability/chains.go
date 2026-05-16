@@ -76,17 +76,16 @@ func (r *Resolver) ResolveLintCheck() Engine {
 // lintEngine factors the chain so both modes share the same matching
 // logic.  Passing fix=false yields the check-only invocation.
 //
-// Language lint is first-match-wins, but `actionlint` is *always*
-// appended when workflows exist — actions YAML wants linting in every
-// repo that has it, regardless of primary language.  The result is a
-// multiEngine when both apply, a single engine otherwise.
+// Language lint is first-match-wins.  `actionlint` is *additionally*
+// composed in when both (a) workflows exist and (b) actionlint is on
+// PATH — gating on availability avoids breaking CI runs that don't
+// have actionlint installed, while still picking it up automatically
+// on machines that do.  `stratt doctor` surfaces the conditional skip
+// so it's not silent.
 func (r *Resolver) lintEngine(fix bool) Engine {
 	primary := r.languageLintEngine(fix)
 	var secondary Engine
-	if r.hasGitHubWorkflows() {
-		// actionlint validates workflow files under .github/workflows/.
-		// It does NOT understand composite `action.yml`; we already
-		// gate detection on workflows so this is safe.  No fix mode.
+	if r.hasGitHubWorkflows() && available("actionlint") {
 		secondary = &execEngine{tool: "actionlint", argv: []string{}, display: "actionlint"}
 	}
 	switch {
@@ -98,6 +97,14 @@ func (r *Resolver) lintEngine(fix bool) Engine {
 		return secondary
 	}
 	return nil
+}
+
+// ActionlintAvailable reports whether the lint chain would compose
+// actionlint into the lint step for this repo.  Returns (workflowsExist,
+// toolAvailable) so `stratt doctor` can show a one-line note when the
+// repo has workflows but actionlint isn't installed.
+func (r *Resolver) ActionlintAvailable() (workflowsExist, toolAvailable bool) {
+	return r.hasGitHubWorkflows(), available("actionlint")
 }
 
 // languageLintEngine returns the per-language lint engine — the

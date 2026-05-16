@@ -100,6 +100,17 @@ func newDoctorCmd(b BuildInfo) *cobra.Command {
 				mtw.Flush()
 			}
 
+			// Opt-in hint: actionlint silently absent.  Workflows exist
+			// but the tool isn't installed, so lint won't catch action
+			// YAML problems.  Not an error — actionlint is intentionally
+			// gated on availability to keep CI green for repos that
+			// haven't installed it — but worth surfacing once.
+			if wf, tool := resolver.ActionlintAvailable(); wf && !tool {
+				fmt.Fprintln(out)
+				fmt.Fprintln(out, "Note: workflows under .github/workflows/ are present but `actionlint` isn't on PATH —")
+				fmt.Fprintln(out, "      install it (`brew install actionlint`) and stratt will lint them as part of `stratt lint`.")
+			}
+
 			return nil
 		},
 	}
